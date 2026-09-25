@@ -56,6 +56,7 @@ export interface CandidateProfile {
   verifiedSpecialist: boolean;
   avatarInitials: string;
   accentColor: string;
+  resumeFileName?: string;
   portfolioProjects: {
     title: string;
     system: string;
@@ -140,25 +141,4 @@ export interface Application {
   resumeFileName: string;
   status: 'applied' | 'screening' | 'technical_interview' | 'offer_extended' | 'archived';
   internalNotes?: string;
-}
-
-export interface SimulatedEmail {
-  id: string;
-  to: string;
-  from: string;
-  subject: string;
-  body: string;
-  timestamp: string;
-  triggerEvent: 
-    | 'employer_registration'
-    | 'admin_company_approved'
-    | 'admin_company_rejected'
-    | 'candidate_applied'
-    | 'interview_scheduled';
-  read: boolean;
-  metadata?: {
-    companyId?: string;
-    jobId?: string;
-    applicantId?: string;
-  };
 }

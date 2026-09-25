@@ -19,13 +19,15 @@ import {
   Filter,
   Eye,
   Check,
-  X
+  X,
+  UserCheck
 } from 'lucide-react';
 
 interface EmployerViewProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenRegisterModal: () => void;
+  onOpenRegisterCandidateModal?: () => void;
 }
 
 const ALL_PLM_SYSTEMS: PLMSystem[] = [
@@ -63,7 +65,8 @@ const ALL_CAD_TOOLS: CADTool[] = [
 export const EmployerView: React.FC<EmployerViewProps> = ({ 
   activeTab, 
   setActiveTab,
-  onOpenRegisterModal 
+  onOpenRegisterModal,
+  onOpenRegisterCandidateModal
 }) => {
   const { 
     currentEmployer, 
@@ -77,14 +80,14 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
   // Job Creator Form State
   const [jobTitle, setJobTitle] = useState('');
   const [primaryPLM, setPrimaryPLM] = useState<PLMSystem>(
-    currentEmployer?.primaryPLMStack[0] || 'Siemens Teamcenter'
+    currentEmployer?.primaryPLMStack?.[0] || 'Siemens Teamcenter'
   );
   const [selectedModules, setSelectedModules] = useState<PLMModule[]>([
     'BOM & Part Architecture', 
     'Engineering Change (ECN/ECO)'
   ]);
   const [selectedCAD, setSelectedCAD] = useState<CADTool[]>([
-    currentEmployer?.cadEnvironments[0] || 'Siemens NX'
+    currentEmployer?.cadEnvironments?.[0] || 'Siemens NX'
   ]);
   const [experienceLevel, setExperienceLevel] = useState<'Junior (1-3 yrs)' | 'Mid-Senior (4-7 yrs)' | 'Lead / Architect (8+ yrs)' | 'Principal / Director'>('Lead / Architect (8+ yrs)');
   const [employmentType, setEmploymentType] = useState<'Full-Time Permanent' | 'Contract (W2/C2C)' | 'Contract-to-Hire'>('Full-Time Permanent');
@@ -831,6 +834,38 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
+      {/* Overview Header & Dual Registration Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            Enterprise PLM Talent Portal
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Active Enterprise: <strong className="text-slate-900">{currentEmployer.companyName}</strong> · Legal Entity: <span className="font-mono">{currentEmployer.legalEntity}</span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={onOpenRegisterModal}
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>+ Register Enterprise</span>
+          </button>
+
+          {onOpenRegisterCandidateModal && (
+            <button
+              onClick={onOpenRegisterCandidateModal}
+              className="px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Register as Candidate</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* VERIFICATION CALLOUT BANNER */}
       {!isVerified ? (
         <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
@@ -848,7 +883,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-800 mt-1 max-w-2xl leading-relaxed">
-                When you registered {currentEmployer.companyName}, an automated notification was emailed to the Main Admin (<span className="font-mono text-amber-950">admin@plmnexus.internal</span>). Once the Admin audits your legal credentials, your positions will immediately unlock for verified PLM candidates.
+                Your verification request for {currentEmployer.companyName} is queued for Main Admin audit. Once the Admin audits your legal credentials, your positions will immediately unlock for verified PLM candidates.
               </p>
             </div>
           </div>
@@ -984,7 +1019,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                       <span>{job.workplaceType} ({job.location})</span>
                       <span>·</span>
                       <span className="font-mono tabular-nums">
-                        ${job.compensation.min.toLocaleString()} - ${job.compensation.max.toLocaleString()}
+                        {job.compensation?.min ? `$${job.compensation.min.toLocaleString()} - $${job.compensation.max?.toLocaleString()}` : 'Competitive'}
                       </span>
                       <span>·</span>
                       <span>Posted {new Date(job.postedAt).toLocaleDateString()}</span>

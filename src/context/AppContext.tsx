@@ -4,19 +4,27 @@ import {
   CandidateProfile, 
   EmployerProfile, 
   Job, 
-  Application, 
-  SimulatedEmail,
-  PLMSystem,
-  PLMModule,
-  ClearanceLevel
+  Application
 } from '../types';
 import { 
   INITIAL_EMPLOYERS, 
   INITIAL_CANDIDATE, 
   INITIAL_JOBS, 
-  INITIAL_APPLICATIONS, 
-  INITIAL_SIMULATED_EMAILS 
+  INITIAL_APPLICATIONS
 } from '../services/mockData';
+import { auth } from '../firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import {
+  purgeDummyDataFromFirestore,
+  subscribeToEmployers,
+  subscribeToJobs,
+  subscribeToApplications,
+  subscribeToCandidate,
+  saveEmployerToFirestore,
+  saveJobToFirestore,
+  saveApplicationToFirestore,
+  updateCandidateInFirestore,
+} from '../services/firebaseService';
 
 interface AppContextType {
   role: UserRole;
@@ -29,35 +37,46 @@ interface AppContextType {
   currentEmployer: EmployerProfile | undefined;
   jobs: Job[];
   applications: Application[];
-  simulatedEmails: SimulatedEmail[];
-  unreadEmailCount: number;
   savedJobIds: string[];
   toggleSaveJob: (jobId: string) => void;
   registerEmployer: (newEmp: Omit<EmployerProfile, 'id' | 'verificationStatus' | 'verificationRequestedAt' | 'logoInitials' | 'logoBg'>) => Promise<string>;
+  registerCandidate: (newCand: Omit<CandidateProfile, 'id' | 'avatarInitials' | 'accentColor' | 'verifiedSpecialist'>) => Promise<string>;
   approveEmployer: (employerId: string, notes?: string) => void;
   rejectEmployer: (employerId: string, reason: string) => void;
   postJob: (jobData: Omit<Job, 'id' | 'employerId' | 'employerName' | 'employerLogoInitials' | 'employerLogoBg' | 'isEmployerVerified' | 'postedAt' | 'applicantCount' | 'status'>) => { success: boolean; message: string };
   applyToJob: (jobId: string, coverNote: string, resumeFileName?: string) => { success: boolean; message: string };
   updateApplicationStage: (applicationId: string, newStatus: Application['status'], notes?: string) => void;
-  markEmailAsRead: (emailId: string) => void;
-  markAllEmailsAsRead: () => void;
-  isEmailDrawerOpen: boolean;
-  setIsEmailDrawerOpen: (open: boolean) => void;
   notificationToast: { message: string; type: 'success' | 'info' | 'warning' } | null;
   dismissToast: () => void;
+  currentUser: User | null;
+  isFirebaseConnected: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Purge obsolete mock storage keys
+if (typeof window !== 'undefined') {
+  const legacyKeys = [
+    'plm_nexus_employers_v2',
+    'plm_nexus_curr_emp_id',
+    'plm_nexus_candidate_v2',
+    'plm_nexus_jobs_v2',
+    'plm_nexus_applications_v2',
+    'plm_nexus_emails_v2',
+    'plm_nexus_saved_jobs_v2',
+    'plm_nexus_emails_clean',
+  ];
+  legacyKeys.forEach(k => localStorage.removeItem(k));
+}
+
 const STORAGE_KEYS = {
-  ROLE: 'plm_nexus_role',
-  EMPLOYERS: 'plm_nexus_employers_v2',
-  CURRENT_EMP_ID: 'plm_nexus_curr_emp_id',
-  CANDIDATE: 'plm_nexus_candidate_v2',
-  JOBS: 'plm_nexus_jobs_v2',
-  APPLICATIONS: 'plm_nexus_applications_v2',
-  EMAILS: 'plm_nexus_emails_v2',
-  SAVED_JOBS: 'plm_nexus_saved_jobs_v2',
+  ROLE: 'plm_nexus_role_clean',
+  EMPLOYERS: 'plm_nexus_employers_clean',
+  CURRENT_EMP_ID: 'plm_nexus_curr_emp_id_clean',
+  CANDIDATE: 'plm_nexus_candidate_clean',
+  JOBS: 'plm_nexus_jobs_clean',
+  APPLICATIONS: 'plm_nexus_applications_clean',
+  SAVED_JOBS: 'plm_nexus_saved_jobs_clean',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -73,7 +92,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentEmployerId, setCurrentEmployerIdState] = useState<string>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_EMP_ID);
-    return saved || 'emp-01';
+    return saved || '';
   });
 
   const [candidate, setCandidate] = useState<CandidateProfile>(() => {
@@ -91,20 +110,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_APPLICATIONS;
   });
 
-  const [simulatedEmails, setSimulatedEmails] = useState<SimulatedEmail[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.EMAILS);
-    return saved ? JSON.parse(saved) : INITIAL_SIMULATED_EMAILS;
-  });
-
   const [savedJobIds, setSavedJobIds] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.SAVED_JOBS);
-    return saved ? JSON.parse(saved) : ['job-01'];
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
 
-  // Sync state to LocalStorage
+  // Initialize Firebase listeners and purge any old dummy data
+  useEffect(() => {
+    purgeDummyDataFromFirestore().catch(err => {
+      console.warn('Purge dummy data:', err);
+    });
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+
+    const unsubEmployers = subscribeToEmployers((liveEmployers) => {
+      setEmployers(liveEmployers);
+      if (liveEmployers.length > 0 && !currentEmployerId) {
+        setCurrentEmployerIdState(liveEmployers[0].id);
+      }
+    });
+
+    const unsubJobs = subscribeToJobs((liveJobs) => {
+      setJobs(liveJobs);
+    });
+
+    const unsubApplications = subscribeToApplications((liveApps) => {
+      setApplications(liveApps);
+    });
+
+    const unsubCandidate = subscribeToCandidate(candidate.id || 'cand-01', (liveCandidate) => {
+      if (liveCandidate) {
+        setCandidate(liveCandidate);
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      unsubEmployers();
+      unsubJobs();
+      unsubApplications();
+      unsubCandidate();
+    };
+  }, []);
+
+  // Sync state to clean LocalStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ROLE, role);
   }, [role]);
@@ -130,10 +185,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [applications]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.EMAILS, JSON.stringify(simulatedEmails));
-  }, [simulatedEmails]);
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SAVED_JOBS, JSON.stringify(savedJobIds));
   }, [savedJobIds]);
 
@@ -155,15 +206,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentEmployerIdState(id);
     const emp = employers.find(e => e.id === id);
     if (emp) {
-      showToast(`Switched active enterprise to: ${emp.companyName} (${emp.verificationStatus === 'verified' ? 'Verified' : 'Pending Verification'})`, 'info');
+      showToast(`Active enterprise: ${emp.companyName} (${emp.verificationStatus === 'verified' ? 'Verified' : 'Pending Verification'})`, 'info');
     }
   };
 
-  const currentEmployer = employers.find(e => e.id === currentEmployerId) || employers[0];
+  const currentEmployer = employers.find(e => e.id === currentEmployerId) || employers[0] || undefined;
 
   const updateCandidate = (data: Partial<CandidateProfile>) => {
-    setCandidate(prev => ({ ...prev, ...data }));
-    showToast('Candidate PLM Profile updated successfully', 'success');
+    const updated = { ...candidate, ...data };
+    setCandidate(updated);
+    updateCandidateInFirestore(updated);
+    showToast('Candidate profile updated and saved to Firebase', 'success');
   };
 
   const toggleSaveJob = (jobId: string) => {
@@ -175,7 +228,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // 1. Employer Registers Company -> Triggers email to Main Admin!
+  // Register Candidate / Job Seeker Profile -> Persists to Firestore
+  const registerCandidate = async (newCand: Omit<CandidateProfile, 'id' | 'avatarInitials' | 'accentColor' | 'verifiedSpecialist'>): Promise<string> => {
+    const id = `cand-${Date.now().toString().slice(-4)}`;
+    const initials = newCand.name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'PLM';
+    const colors = ['bg-blue-600', 'bg-indigo-600', 'bg-emerald-600', 'bg-slate-800', 'bg-cyan-700', 'bg-teal-700'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const createdCand: CandidateProfile = {
+      ...newCand,
+      id,
+      avatarInitials: initials,
+      accentColor: randomColor,
+      verifiedSpecialist: true,
+      resumeFileName: newCand.resumeFileName || `${newCand.name.replace(/\s+/g, '_')}_PLM_Resume.pdf`,
+    };
+
+    setCandidate(createdCand);
+    await updateCandidateInFirestore(createdCand);
+    showToast(`Welcome, ${createdCand.name}! Your PLM specialist profile is registered & active.`, 'success');
+    return id;
+  };
+
+  // 1. Employer Registers Company -> Persists to Firestore
   const registerEmployer = async (newEmp: Omit<EmployerProfile, 'id' | 'verificationStatus' | 'verificationRequestedAt' | 'logoInitials' | 'logoBg'>): Promise<string> => {
     const id = `emp-${Date.now().toString().slice(-4)}`;
     const initials = newEmp.companyName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -194,61 +276,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setEmployers(prev => [createdEmp, ...prev]);
     setCurrentEmployerIdState(id);
+    saveEmployerToFirestore(createdEmp);
 
-    // CRITICAL REQUIREMENT: Trigger automated email to Main Admin!
-    const adminAlertEmail: SimulatedEmail = {
-      id: `mail-${Date.now()}-1`,
-      to: 'admin@plmnexus.internal',
-      from: 'system@plmnexus.internal',
-      subject: `[ACTION REQUIRED] New PLM Employer Registered: ${createdEmp.companyName} (${createdEmp.corporateDomain})`,
-      body: `Hello Platform Governance Administrator,
-
-A new corporate enterprise has completed registration on PLM Nexus and requested Enterprise Verification:
-
-• Company Name: ${createdEmp.companyName}
-• Legal Entity: ${createdEmp.legalEntity}
-• Corporate Domain: ${createdEmp.corporateDomain}
-• Contact Representative: ${createdEmp.contactPerson} (${createdEmp.contactTitle})
-• Direct Contact: ${createdEmp.contactEmail}
-• Tax Registration / EIN: ${createdEmp.taxRegistrationNumber}
-• Declared PLM Systems: ${createdEmp.primaryPLMStack.join(', ')}
-• Attached Audit File: ${createdEmp.verificationDocName}
-
-NOTICE: This company cannot publish public PLM jobs or contact engineers until you review their business legitimacy in the Main Admin Console.
-
-Go to Main Admin Console > Verification Queue to approve or request further documents.`,
-      timestamp: new Date().toISOString(),
-      triggerEvent: 'employer_registration',
-      read: false,
-      metadata: { companyId: id },
-    };
-
-    // Also send receipt email to employer contact
-    const employerReceiptEmail: SimulatedEmail = {
-      id: `mail-${Date.now()}-2`,
-      to: createdEmp.contactEmail,
-      from: 'governance@plmnexus.internal',
-      subject: `Verification Request Received for ${createdEmp.companyName}`,
-      body: `Dear ${createdEmp.contactPerson},
-
-We have received your verification request for ${createdEmp.companyName}.
-
-Our Platform Governance Admin has been notified via priority dispatch and is auditing your domain (${createdEmp.corporateDomain}) and PLM credentials. Once verified, your account will be unlocked to post positions and scout certified PLM specialists.
-
-Current Status: Pending Admin Review
-Estimated Review Time: Under 2 hours`,
-      timestamp: new Date().toISOString(),
-      triggerEvent: 'employer_registration',
-      read: false,
-      metadata: { companyId: id },
-    };
-
-    setSimulatedEmails(prev => [adminAlertEmail, employerReceiptEmail, ...prev]);
-    showToast(`Registered ${createdEmp.companyName}! Verification email sent to Main Admin.`, 'success');
+    showToast(`Registered ${createdEmp.companyName}! Submitted for Main Admin verification.`, 'success');
     return id;
   };
 
-  // 2. Main Admin Approves Company -> Unlocks job posting & notifies Employer
+  // 2. Main Admin Approves Company -> Unlocks job posting & updates Firestore
   const approveEmployer = (employerId: string, notes?: string) => {
     let approvedEmp: EmployerProfile | undefined;
 
@@ -259,54 +293,28 @@ Estimated Review Time: Under 2 hours`,
           verificationStatus: 'verified',
           verifiedAt: new Date().toISOString(),
         };
+        saveEmployerToFirestore(approvedEmp);
         return approvedEmp;
       }
       return emp;
     }));
 
-    // Unlock any jobs posted by this employer that were in pending status
+    // Unlock any jobs posted by this employer
     setJobs(prev => prev.map(job => {
       if (job.employerId === employerId) {
-        return {
+        const updatedJob = {
           ...job,
           isEmployerVerified: true,
-          status: 'active',
+          status: 'active' as const,
         };
+        saveJobToFirestore(updatedJob);
+        return updatedJob;
       }
       return job;
     }));
 
     if (approvedEmp) {
-      // Dispatch automated congratulations email to employer
-      const approvalEmail: SimulatedEmail = {
-        id: `mail-${Date.now()}`,
-        to: approvedEmp.contactEmail,
-        from: 'governance@plmnexus.internal',
-        subject: `[APPROVED] Enterprise Verification Granted: ${approvedEmp.companyName}`,
-        body: `Dear ${approvedEmp.contactPerson},
-
-Great news! The Main Admin has reviewed and APPROVED the verification credentials for ${approvedEmp.companyName}.
-
-Verification Audit Log:
-• Corporate Domain: ${approvedEmp.corporateDomain} (VERIFIED)
-• Tax & Business Entity: ${approvedEmp.legalEntity} (VERIFIED)
-• PLM Ecosystem Stack: ${approvedEmp.primaryPLMStack.join(', ')}
-${notes ? `• Admin Audit Note: "${notes}"` : ''}
-
-Your enterprise account has now been activated. You can immediately:
-1. Publish live PLM job listings visible to verified Teamcenter, Windchill, and 3DEXPERIENCE engineers.
-2. Review applicant resumes, match scores, and portfolio projects.
-3. Advance candidates through your technical hiring stages.
-
-Thank you for maintaining the highest standards in the PLM ecosystem.`,
-        timestamp: new Date().toISOString(),
-        triggerEvent: 'admin_company_approved',
-        read: false,
-        metadata: { companyId: employerId },
-      };
-
-      setSimulatedEmails(prev => [approvalEmail, ...prev]);
-      showToast(`${approvedEmp.companyName} has been verified! Approval email dispatched.`, 'success');
+      showToast(`${approvedEmp.companyName} has been verified and synced to Firebase!`, 'success');
     }
   };
 
@@ -317,42 +325,24 @@ Thank you for maintaining the highest standards in the PLM ecosystem.`,
 
     setEmployers(prev => prev.map(e => {
       if (e.id === employerId) {
-        return {
+        const rejected = {
           ...e,
-          verificationStatus: 'rejected',
+          verificationStatus: 'rejected' as const,
           rejectionReason: reason,
         };
+        saveEmployerToFirestore(rejected);
+        return rejected;
       }
       return e;
     }));
 
-    const rejectEmail: SimulatedEmail = {
-      id: `mail-${Date.now()}`,
-      to: emp.contactEmail,
-      from: 'governance@plmnexus.internal',
-      subject: `Notice: Verification Update for ${emp.companyName}`,
-      body: `Dear ${emp.contactPerson},
-
-Regarding your verification request for ${emp.companyName}:
-
-Our Platform Administrator was unable to complete verification due to the following reason:
-"${reason}"
-
-Please update your corporate documentation or reply directly with valid business registration proofs.`,
-      timestamp: new Date().toISOString(),
-      triggerEvent: 'admin_company_rejected',
-      read: false,
-      metadata: { companyId: employerId },
-    };
-
-    setSimulatedEmails(prev => [rejectEmail, ...prev]);
-    showToast(`Verification rejected for ${emp.companyName}. Notification email sent.`, 'warning');
+    showToast(`Verification rejected for ${emp.companyName}. Synced to Firebase.`, 'warning');
   };
 
   // 4. Post Job - Checks if employer is verified!
   const postJob = (jobData: Omit<Job, 'id' | 'employerId' | 'employerName' | 'employerLogoInitials' | 'employerLogoBg' | 'isEmployerVerified' | 'postedAt' | 'applicantCount' | 'status'>): { success: boolean; message: string } => {
     if (!currentEmployer) {
-      return { success: false, message: 'No active employer selected' };
+      return { success: false, message: 'No active employer registered. Please register your company first.' };
     }
 
     const isVerified = currentEmployer.verificationStatus === 'verified';
@@ -370,16 +360,17 @@ Please update your corporate documentation or reply directly with valid business
     };
 
     setJobs(prev => [newJob, ...prev]);
+    saveJobToFirestore(newJob);
 
     if (!isVerified) {
-      showToast('Job saved in draft! Your company must be verified by the Admin before public publishing.', 'warning');
+      showToast('Job saved in draft in Firebase! Your company must be verified by the Admin before public publishing.', 'warning');
       return { 
         success: true, 
-        message: 'Job created in pending state. It will automatically publish once the Main Admin approves your company verification.' 
+        message: 'Job created in pending state in Firebase. It will automatically publish once the Main Admin approves your company verification.' 
       };
     }
 
-    showToast(`Published: "${newJob.title}" to certified PLM candidates!`, 'success');
+    showToast(`Published: "${newJob.title}" to Firebase!`, 'success');
     return { success: true, message: 'Job successfully posted and live across PLM Nexus.' };
   };
 
@@ -393,15 +384,17 @@ Please update your corporate documentation or reply directly with valid business
       return { success: false, message: 'You have already applied to this position.' };
     }
 
-    // Calculate realistic match score
+    // Calculate match score
     let score = 70;
     if (candidate.primaryPLM === targetJob.primaryPLM) score += 15;
-    else if (targetJob.relatedSystems.includes(candidate.primaryPLM) || candidate.secondaryPLMs.includes(targetJob.primaryPLM)) score += 8;
+    else if ((targetJob.relatedSystems || []).includes(candidate.primaryPLM) || (candidate.secondaryPLMs || []).includes(targetJob.primaryPLM)) score += 8;
 
-    const matchingModules = targetJob.requiredModules.filter(m => candidate.modules.includes(m));
+    const candidateModules = candidate.modules || [];
+    const jobModules = targetJob.requiredModules || [];
+    const matchingModules = jobModules.filter(m => candidateModules.includes(m));
     score += Math.min(10, matchingModules.length * 3);
 
-    if (targetJob.itarRequired && candidate.clearance !== 'None') score += 5;
+    if (targetJob.itarRequired && candidate.clearance && candidate.clearance !== 'None') score += 5;
 
     const newApp: Application = {
       id: `app-${Date.now()}`,
@@ -410,55 +403,27 @@ Please update your corporate documentation or reply directly with valid business
       employerId: targetJob.employerId,
       employerName: targetJob.employerName,
       candidateId: candidate.id,
-      candidateName: candidate.name,
-      candidateEmail: candidate.email,
-      candidateHeadline: candidate.headline,
+      candidateName: candidate.name || 'Candidate',
+      candidateEmail: candidate.email || 'candidate@plmnexus.internal',
+      candidateHeadline: candidate.headline || 'PLM Specialist',
       candidatePrimaryPLM: candidate.primaryPLM,
-      candidateExperience: candidate.yearsOfExperience,
+      candidateExperience: candidate.yearsOfExperience || 0,
       matchScore: Math.min(99, score),
       appliedDate: new Date().toISOString(),
       coverNote,
-      resumeFileName: resumeFileName || 'Marcus_Vance_PLM_Architect_Resume.pdf',
+      resumeFileName: resumeFileName || 'Candidate_Resume.pdf',
       status: 'applied',
     };
 
     setApplications(prev => [newApp, ...prev]);
+    saveApplicationToFirestore(newApp);
 
     // Update job applicant count
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, applicantCount: j.applicantCount + 1 } : j));
+    const updatedJob = { ...targetJob, applicantCount: (targetJob.applicantCount || 0) + 1 };
+    setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
+    saveJobToFirestore(updatedJob);
 
-    // Simulated email to employer
-    const employerNotice: SimulatedEmail = {
-      id: `mail-${Date.now()}`,
-      to: `careers@${targetJob.employerName.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-      from: 'alerts@plmnexus.internal',
-      subject: `[New Candidate Application] ${candidate.name} applied for ${targetJob.title} (${Math.min(99, score)}% Match)`,
-      body: `Hello ${targetJob.employerName} Talent Team,
-
-A verified PLM specialist has submitted an application for "${targetJob.title}":
-
-• Candidate: ${candidate.name}
-• Primary Stack: ${candidate.primaryPLM} (${candidate.yearsOfExperience} yrs dedicated experience)
-• Match Score: ${Math.min(99, score)}% against required PLM modules
-• ITAR / Clearance: ${candidate.clearance}
-• Resume: ${newApp.resumeFileName}
-
-Cover Note Summary:
-"${coverNote.slice(0, 200)}..."
-
-Review full portfolio & advance candidate in your PLM Nexus ATS Pipeline.`,
-      timestamp: new Date().toISOString(),
-      triggerEvent: 'candidate_applied',
-      read: false,
-      metadata: {
-        jobId,
-        companyId: targetJob.employerId,
-        applicantId: newApp.id,
-      },
-    };
-
-    setSimulatedEmails(prev => [employerNotice, ...prev]);
-    showToast(`Application submitted to ${targetJob.employerName} with ${Math.min(99, score)}% PLM match score!`, 'success');
+    showToast(`Application saved to Firebase with ${Math.min(99, score)}% match score!`, 'success');
     return { success: true, message: 'Application submitted successfully!' };
   };
 
@@ -473,6 +438,7 @@ Review full portfolio & advance candidate in your PLM Nexus ATS Pipeline.`,
           status: newStatus,
           internalNotes: notes !== undefined ? notes : app.internalNotes,
         };
+        saveApplicationToFirestore(targetApp);
         return targetApp;
       }
       return app;
@@ -487,47 +453,9 @@ Review full portfolio & advance candidate in your PLM Nexus ATS Pipeline.`,
         archived: 'Archived',
       };
 
-      // If moving to interview or offer, notify candidate
-      if (newStatus === 'technical_interview' || newStatus === 'offer_extended') {
-        const candidateEmail: SimulatedEmail = {
-          id: `mail-${Date.now()}`,
-          to: targetApp.candidateEmail,
-          from: `recruiting@${targetApp.employerName.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-          subject: `${newStatus === 'offer_extended' ? 'Formal Offer' : 'Interview Invitation'}: ${targetApp.jobTitle} at ${targetApp.employerName}`,
-          body: `Dear ${targetApp.candidateName},
-
-We have reviewed your application for the ${targetApp.jobTitle} position at ${targetApp.employerName}.
-
-Status Update: You have been moved to "${stageLabels[newStatus]}".
-
-Our engineering team was impressed by your ${targetApp.candidatePrimaryPLM} background. Please check your candidate portal for next steps and calendar availability.`,
-          timestamp: new Date().toISOString(),
-          triggerEvent: newStatus === 'technical_interview' ? 'interview_scheduled' : 'admin_company_approved',
-          read: false,
-          metadata: {
-            applicantId: applicationId,
-            companyId: targetApp.employerId,
-            jobId: targetApp.jobId,
-          },
-        };
-
-        setSimulatedEmails(prev => [candidateEmail, ...prev]);
-      }
-
-      showToast(`Candidate moved to stage: ${stageLabels[newStatus]}`, 'success');
+      showToast(`Candidate moved to stage: ${stageLabels[newStatus]} (Synced to Firebase)`, 'success');
     }
   };
-
-  const markEmailAsRead = (emailId: string) => {
-    setSimulatedEmails(prev => prev.map(m => m.id === emailId ? { ...m, read: true } : m));
-  };
-
-  const markAllEmailsAsRead = () => {
-    setSimulatedEmails(prev => prev.map(m => ({ ...m, read: true })));
-    showToast('All notifications marked as read', 'info');
-  };
-
-  const unreadEmailCount = simulatedEmails.filter(m => !m.read).length;
 
   return (
     <AppContext.Provider
@@ -542,22 +470,19 @@ Our engineering team was impressed by your ${targetApp.candidatePrimaryPLM} back
         currentEmployer,
         jobs,
         applications,
-        simulatedEmails,
-        unreadEmailCount,
         savedJobIds,
         toggleSaveJob,
         registerEmployer,
+        registerCandidate,
         approveEmployer,
         rejectEmployer,
         postJob,
         applyToJob,
         updateApplicationStage,
-        markEmailAsRead,
-        markAllEmailsAsRead,
-        isEmailDrawerOpen,
-        setIsEmailDrawerOpen,
         notificationToast,
         dismissToast,
+        currentUser,
+        isFirebaseConnected,
       }}
     >
       {children}

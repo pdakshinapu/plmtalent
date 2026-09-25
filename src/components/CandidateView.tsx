@@ -27,6 +27,8 @@ import {
 interface CandidateViewProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onOpenRegisterCandidateModal?: () => void;
+  onOpenRegisterEmployerModal?: () => void;
 }
 
 const PLM_SYSTEM_OPTIONS: (PLMSystem | 'All')[] = [
@@ -48,7 +50,12 @@ const PLM_MODULE_OPTIONS: (PLMModule | 'All')[] = [
   'Data Migration & ETL',
 ];
 
-export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActiveTab }) => {
+export const CandidateView: React.FC<CandidateViewProps> = ({ 
+  activeTab, 
+  setActiveTab,
+  onOpenRegisterCandidateModal,
+  onOpenRegisterEmployerModal
+}) => {
   const { 
     jobs, 
     candidate, 
@@ -71,7 +78,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [coverNote, setCoverNote] = useState('');
-  const [resumeFileName, setResumeFileName] = useState('Marcus_Vance_PLM_Architect_Resume.pdf');
+  const [resumeFileName, setResumeFileName] = useState('Candidate_PLM_Resume.pdf');
 
   // Filtered jobs calculation
   const filteredJobs = useMemo(() => {
@@ -90,12 +97,12 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
       }
 
       if (selectedSystem !== 'All') {
-        const matchesSys = job.primaryPLM === selectedSystem || job.relatedSystems.includes(selectedSystem);
+        const matchesSys = job.primaryPLM === selectedSystem || (job.relatedSystems || []).includes(selectedSystem);
         if (!matchesSys) return false;
       }
 
       if (selectedModule !== 'All') {
-        if (!job.requiredModules.includes(selectedModule)) return false;
+        if (!(job.requiredModules || []).includes(selectedModule)) return false;
       }
 
       if (clearanceFilter === 'ITAR') {
@@ -114,21 +121,25 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
 
   // Compute match score helper
   const computeMatch = (job: Job) => {
+    if (!job || !candidate) return 70;
     let score = 70;
     if (candidate.primaryPLM === job.primaryPLM) score += 15;
-    else if (job.relatedSystems.includes(candidate.primaryPLM) || candidate.secondaryPLMs.includes(job.primaryPLM)) score += 8;
+    else if ((job.relatedSystems || []).includes(candidate.primaryPLM) || (candidate.secondaryPLMs || []).includes(job.primaryPLM)) score += 8;
 
-    const matchingMods = job.requiredModules.filter(m => candidate.modules.includes(m));
+    const candidateModules = candidate.modules || [];
+    const jobModules = job.requiredModules || [];
+    const matchingMods = jobModules.filter(m => candidateModules.includes(m));
     score += Math.min(10, matchingMods.length * 3);
 
-    if (job.itarRequired && candidate.clearance !== 'None') score += 5;
+    if (job.itarRequired && candidate.clearance && candidate.clearance !== 'None') score += 5;
     return Math.min(99, score);
   };
 
   const handleOpenApplyModal = (job: Job) => {
     setSelectedJob(job);
+    const reqMods = job.requiredModules || [];
     setCoverNote(
-      `Hello ${job.employerName} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate.yearsOfExperience} years dedicated to ${candidate.primaryPLM}, I have extensive experience in ${job.requiredModules.slice(0, 2).join(' and ')}.\n\nMy profile and certifications are verified on PLM Nexus.`
+      `Hello ${job.employerName} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate?.yearsOfExperience || 5} years dedicated to ${candidate?.primaryPLM || 'PLM'}, I have extensive experience in ${reqMods.slice(0, 2).join(' and ') || 'system architecture'}.\n\nMy profile and certifications are verified on PLM Nexus.`
     );
     setIsApplying(true);
   };
@@ -282,6 +293,15 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               Verified PLM Specialist
             </span>
+            {onOpenRegisterCandidateModal && (
+              <button
+                onClick={onOpenRegisterCandidateModal}
+                className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-2xs"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>+ Register New Profile</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -293,14 +313,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                 {candidate.avatarInitials}
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">{candidate.name}</h2>
-                <p className="text-xs text-slate-600 max-w-xl mt-0.5">{candidate.headline}</p>
+                <h2 className="text-lg font-bold text-slate-900">{candidate.name || 'Candidate Profile'}</h2>
+                <p className="text-xs text-slate-600 max-w-xl mt-0.5">{candidate.headline || 'Configure your verified PLM competencies'}</p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
-                  <span>{candidate.location}</span>
+                  <span>{candidate.location || 'Location Pending'}</span>
                   <span>·</span>
-                  <span className="font-mono">{candidate.email}</span>
+                  <span className="font-mono">{candidate.email || 'No email specified'}</span>
                   <span>·</span>
-                  <span>{candidate.phone}</span>
+                  <span>{candidate.phone || 'No phone specified'}</span>
                 </div>
               </div>
             </div>
@@ -321,7 +341,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               </h3>
               <div className="p-3 rounded-lg bg-slate-900 text-white text-xs font-semibold flex items-center justify-between">
                 <span>{candidate.primaryPLM}</span>
-                <span className="text-[10px] font-mono text-slate-300">11 yrs</span>
+                <span className="text-[10px] font-mono text-slate-300">{candidate.yearsOfExperience} yrs</span>
               </div>
             </div>
 
@@ -330,7 +350,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                 Secondary Systems
               </h3>
               <div className="flex flex-wrap gap-1.5">
-                {candidate.secondaryPLMs.map(s => (
+                {(candidate.secondaryPLMs || []).map(s => (
                   <span key={s} className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium">
                     {s}
                   </span>
@@ -355,7 +375,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               Domain Competencies & Modules
             </h3>
             <div className="flex flex-wrap gap-2">
-              {candidate.modules.map(mod => (
+              {(candidate.modules || []).map(mod => (
                 <span key={mod} className="px-3 py-1 text-xs rounded-lg bg-slate-100 text-slate-800 font-medium">
                   {mod}
                 </span>
@@ -369,7 +389,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               Integrated CAD Tools
             </h3>
             <div className="flex flex-wrap gap-2">
-              {candidate.cadTools.map(cad => (
+              {(candidate.cadTools || []).map(cad => (
                 <span key={cad} className="px-3 py-1 text-xs rounded-lg border border-slate-200 text-slate-800 font-mono">
                   {cad}
                 </span>
@@ -383,7 +403,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               Verified OEM Certifications
             </h3>
             <div className="space-y-2">
-              {candidate.certifications.map((cert, idx) => (
+              {(candidate.certifications || []).map((cert, idx) => (
                 <div key={idx} className="flex items-center gap-2 text-xs text-slate-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{cert}</span>
@@ -398,7 +418,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
               Selected Enterprise Deployments & Migrations
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {candidate.portfolioProjects.map((p, idx) => (
+              {(candidate.portfolioProjects || []).map((p, idx) => (
                 <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
                   <div className="text-xs font-bold text-slate-900">{p.title}</div>
                   <div className="text-[11px] font-mono text-blue-700">{p.system}</div>
@@ -428,8 +448,17 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {employers.map(emp => {
+        {employers.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center space-y-3">
+            <Building2 className="w-10 h-10 text-slate-300 mx-auto" />
+            <h3 className="text-sm font-semibold text-slate-800">No enterprises registered yet</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Verified corporate enterprises will appear here once registered and approved.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {employers.map(emp => {
             const isVerified = emp.verificationStatus === 'verified';
             const companyJobs = jobs.filter(j => j.employerId === emp.id && j.status === 'active');
 
@@ -486,9 +515,10 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
             );
           })}
         </div>
-      </div>
-    );
-  }
+      )}
+    </div>
+  );
+}
 
   // DEFAULT VIEW: 'explore' (Job Search Board)
   return (
@@ -504,6 +534,48 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
         </p>
       </div>
 
+      {/* Registration Callout Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold uppercase tracking-wider border border-blue-400/30">
+              Talent Registration Live
+            </span>
+            <span className="text-xs text-slate-300">
+              Active Candidate: <strong className="text-white">{candidate?.name || 'PLM Specialist'}</strong> ({candidate?.primaryPLM} · {candidate?.yearsOfExperience} yrs)
+            </span>
+          </div>
+          <h2 className="text-sm font-bold text-white">
+            Looking to register as a Candidate or hire as an Employer?
+          </h2>
+          <p className="text-xs text-slate-300 max-w-xl">
+            Register your engineering credentials to apply with 1-click, or register your company to post ITAR & enterprise PLM positions.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          {onOpenRegisterCandidateModal && (
+            <button
+              onClick={onOpenRegisterCandidateModal}
+              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Register as Candidate</span>
+            </button>
+          )}
+
+          {onOpenRegisterEmployerModal && (
+            <button
+              onClick={onOpenRegisterEmployerModal}
+              className="px-4 py-2 text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              <Building2 className="w-3.5 h-3.5 text-slate-300" />
+              <span>Register as Employer</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Search & Filter Controls */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-4">
         
@@ -514,7 +586,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by title, Teamcenter, Windchill, Active Workspace, BMIDE, ITAR, AeroSys..."
+            placeholder="Search by title, Teamcenter, Windchill, Active Workspace, BMIDE, ITAR, company..."
             className="w-full pl-10 pr-4 py-2.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
           />
         </div>
@@ -616,25 +688,29 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
         </div>
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-          <span>Match algorithms calculated against your verified Siemens Teamcenter profile</span>
+          <span>Match algorithms calculated against your verified {candidate.primaryPLM || 'PLM'} profile</span>
         </div>
       </div>
 
-      {/* Job Listings (Zero-Pill Discipline Adhered To) */}
+      {/* Job Listings */}
       <div className="space-y-4">
         {filteredJobs.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center space-y-3">
             <SlidersHorizontal className="w-8 h-8 text-slate-300 mx-auto" />
-            <h3 className="text-sm font-semibold text-slate-800">No matching positions found</h3>
+            <h3 className="text-sm font-semibold text-slate-800">
+              {jobs.length === 0 ? 'No PLM positions posted yet' : 'No matching positions found'}
+            </h3>
             <p className="text-xs text-slate-500">
-              Try adjusting your PLM platform or clearance filters to explore other enterprise programs.
+              {jobs.length === 0 
+                ? 'Positions will appear here as employers publish new Teamcenter, Windchill, and 3DEXPERIENCE requisitions.'
+                : 'Try adjusting your PLM platform or clearance filters to explore other enterprise programs.'}
             </p>
           </div>
         ) : (
           filteredJobs.map(job => {
             const matchScore = computeMatch(job);
-            const isSaved = savedJobIds.includes(job.id);
-            const hasApplied = applications.some(a => a.jobId === job.id && a.candidateId === candidate.id);
+            const isSaved = (savedJobIds || []).includes(job.id);
+            const hasApplied = (applications || []).some(a => a.jobId === job.id && a.candidateId === (candidate?.id || ''));
 
             return (
               <div
@@ -675,7 +751,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                         <span>{job.workplaceType} ({job.location})</span>
                         <span aria-hidden="true">·</span>
                         <span className="font-mono tabular-nums text-slate-700">
-                          ${job.compensation.min.toLocaleString()} - ${job.compensation.max.toLocaleString()} {job.compensation.period === 'hourly' ? '/ hr' : '/ yr'}
+                          {job.compensation?.min ? `$${job.compensation.min.toLocaleString()} - $${job.compensation.max?.toLocaleString()} ${job.compensation.period === 'hourly' ? '/ hr' : '/ yr'}` : 'Competitive Compensation'}
                         </span>
                         {job.itarRequired && (
                           <>
@@ -733,7 +809,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                 <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                     <span className="text-slate-400 mr-1">Modules:</span>
-                    {job.requiredModules.map(mod => (
+                    {(job.requiredModules || []).map(mod => (
                       <span key={mod} className="px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                         {mod}
                       </span>
@@ -776,7 +852,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                     <span>{selectedJob.workplaceType}</span>
                     <span>·</span>
                     <span className="font-mono text-slate-700">
-                      ${selectedJob.compensation.min.toLocaleString()} - ${selectedJob.compensation.max.toLocaleString()}
+                      {selectedJob.compensation?.min ? `$${selectedJob.compensation.min.toLocaleString()} - $${selectedJob.compensation.max?.toLocaleString()}` : 'Competitive'}
                     </span>
                   </div>
                 </div>
@@ -804,7 +880,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                   Key Technical Responsibilities
                 </h3>
                 <ul className="space-y-2 list-disc pl-5">
-                  {selectedJob.responsibilities.map((r, i) => (
+                  {(selectedJob.responsibilities || []).map((r, i) => (
                     <li key={i}>{r}</li>
                   ))}
                 </ul>
@@ -815,7 +891,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                   Prerequisites & Qualifications
                 </h3>
                 <ul className="space-y-2 list-disc pl-5">
-                  {selectedJob.requirements.map((req, i) => (
+                  {(selectedJob.requirements || []).map((req, i) => (
                     <li key={i}>{req}</li>
                   ))}
                 </ul>
@@ -827,7 +903,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                     Required PLM Modules
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedJob.requiredModules.map(m => (
+                    {(selectedJob.requiredModules || []).map(m => (
                       <span key={m} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px]">
                         {m}
                       </span>
@@ -840,7 +916,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({ activeTab, setActi
                     CAD Integrations
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedJob.cadIntegration.map(c => (
+                    {(selectedJob.cadIntegration || []).map(c => (
                       <span key={c} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px] font-mono">
                         {c}
                       </span>

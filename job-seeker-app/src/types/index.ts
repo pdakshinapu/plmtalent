@@ -56,6 +56,7 @@ export interface CandidateProfile {
   verifiedSpecialist: boolean;
   avatarInitials: string;
   accentColor: string;
+  resumeFileName?: string;
   portfolioProjects: {
     title: string;
     system: string;

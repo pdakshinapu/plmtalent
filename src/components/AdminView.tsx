@@ -9,8 +9,6 @@ import {
   Building2, 
   FileText, 
   ExternalLink, 
-  Mail, 
-  Send, 
   Eye, 
   Check, 
   X, 
@@ -40,8 +38,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
     rejectEmployer, 
     jobs, 
     applications, 
-    simulatedEmails, 
-    setIsEmailDrawerOpen,
     candidate,
     setRole,
     setCurrentEmployerId
@@ -118,7 +114,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {employers.map(emp => {
+              {employers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-500">
+                    <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700">No enterprise accounts registered yet.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">When employers register, their corporate profiles will appear here.</p>
+                  </td>
+                </tr>
+              ) : (
+                employers.map(emp => {
                 const isVerified = emp.verificationStatus === 'verified';
                 const isPending = emp.verificationStatus === 'pending_verification' || emp.verificationStatus === 'under_review';
 
@@ -190,8 +195,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </td>
                   </tr>
                 );
-              })}
-            </tbody>
+              })
+            )}
+          </tbody>
           </table>
         </div>
       </div>
@@ -238,11 +244,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
           </div>
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
-            <span className="text-xs font-medium text-slate-500">Automated Dispatch Emails</span>
+            <span className="text-xs font-medium text-slate-500">Applicant Submissions</span>
             <div className="text-2xl font-bold font-mono text-blue-700">
-              {simulatedEmails.length}
+              {applications.length}
             </div>
-            <span className="text-[11px] text-slate-400">SMTP logs recorded</span>
+            <span className="text-[11px] text-slate-400">Total pipeline applications</span>
           </div>
         </div>
 
@@ -298,63 +304,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
     );
   }
 
-  // Sub-view: System & Email Audit Logs
-  if (activeTab === 'audit-logs') {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">
-              System Audit & SMTP Email Dispatch Monitor
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Every employer registration sends an email to the Main Admin. All triggers logged here.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsEmailDrawerOpen(true)}
-            className="px-3.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5"
-          >
-            <Mail className="w-3.5 h-3.5" />
-            <span>Open Email Simulator Drawer</span>
-          </button>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-          {simulatedEmails.map(mail => (
-            <div key={mail.id} className="p-4 hover:bg-slate-50/60 transition-colors space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-slate-900 text-white flex items-center justify-center text-[10px] font-mono">
-                    @
-                  </div>
-                  <span className="text-xs font-bold text-slate-900">{mail.subject}</span>
-                </div>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {new Date(mail.timestamp).toLocaleString()}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-mono text-[11px]">
-                <span>To: <strong className="text-slate-800">{mail.to}</strong></span>
-                <span>·</span>
-                <span>From: <strong className="text-slate-800">{mail.from}</strong></span>
-                <span>·</span>
-                <span className="uppercase text-[9px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                  {mail.triggerEvent.replace('_', ' ')}
-                </span>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-700 whitespace-pre-wrap font-sans max-h-32 overflow-y-auto">
-                {mail.body}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   // DEFAULT VIEW: 'verification-queue' (The Core Employer Verification Console!)
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -371,7 +320,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-            As mandated by PLM Nexus governance: Whenever a Job Provider (company) registers, an automated email is dispatched to you (<span className="font-mono text-slate-700">admin@plmnexus.internal</span>). You audit their corporate domain, tax registration, and PLM credentials before they can publish jobs or join the network.
+            As mandated by PLM Nexus governance: Whenever a Job Provider registers, their organization is held in pending status until you audit their corporate domain, tax registration, and PLM credentials before they can publish live requisitions.
           </p>
         </div>
 
@@ -625,9 +574,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <br />
                   1. Grant verified status to {selectedAuditEmp.companyName}.
                   <br />
-                  2. Automatically dispatch an official verification email to <span className="font-mono font-semibold">{selectedAuditEmp.contactEmail}</span>.
+                  2. Activate verified credentials and unlock live job publishing across the network.
                   <br />
-                  3. Unlock their pending PLM positions and permit direct communication with candidates.
+                  3. Permit candidate applications and direct hiring workflows.
                 </p>
               </div>
 
@@ -691,7 +640,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
             <form onSubmit={handleConfirmReject} className="space-y-4 text-xs">
               <p className="text-slate-600">
-                Please provide the specific reason for rejecting verification. This explanation will be automatically dispatched via email to <strong className="font-mono">{empToReject.contactEmail}</strong>.
+                Please provide the specific reason for rejecting verification. This explanation will be logged on their company record.
               </p>
 
               <div>
@@ -719,7 +668,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   type="submit"
                   className="px-4 py-2 font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm"
                 >
-                  Confirm Rejection & Dispatch Email
+                  Confirm Rejection
                 </button>
               </div>
             </form>

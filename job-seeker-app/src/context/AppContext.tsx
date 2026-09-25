@@ -34,6 +34,7 @@ interface AppContextType {
   savedJobIds: string[];
   toggleSaveJob: (jobId: string) => void;
   registerEmployer: (newEmp: Omit<EmployerProfile, 'id' | 'verificationStatus' | 'verificationRequestedAt' | 'logoInitials' | 'logoBg'>) => Promise<string>;
+  registerCandidate: (newCand: Omit<CandidateProfile, 'id' | 'avatarInitials' | 'accentColor' | 'verifiedSpecialist'>) => Promise<string>;
   approveEmployer: (employerId: string, notes?: string) => void;
   rejectEmployer: (employerId: string, reason: string) => void;
   postJob: (jobData: Omit<Job, 'id' | 'employerId' | 'employerName' | 'employerLogoInitials' | 'employerLogoBg' | 'isEmployerVerified' | 'postedAt' | 'applicantCount' | 'status'>) => { success: boolean; message: string };
@@ -173,6 +174,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(exists ? 'Removed from saved PLM jobs' : 'Saved job to your PLM bookmarks', 'info');
       return next;
     });
+  };
+
+  // Register Candidate / Job Seeker Profile
+  const registerCandidate = async (newCand: Omit<CandidateProfile, 'id' | 'avatarInitials' | 'accentColor' | 'verifiedSpecialist'>): Promise<string> => {
+    const id = `cand-${Date.now().toString().slice(-4)}`;
+    const initials = newCand.name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'PLM';
+    const colors = ['bg-blue-600', 'bg-indigo-600', 'bg-emerald-600', 'bg-slate-800', 'bg-cyan-700', 'bg-teal-700'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const createdCand: CandidateProfile = {
+      ...newCand,
+      id,
+      avatarInitials: initials,
+      accentColor: randomColor,
+      verifiedSpecialist: true,
+      resumeFileName: newCand.resumeFileName || `${newCand.name.replace(/\s+/g, '_')}_PLM_Resume.pdf`,
+    };
+
+    setCandidate(createdCand);
+    showToast(`Welcome, ${createdCand.name}! Your PLM candidate profile is now registered & active.`, 'success');
+    return id;
   };
 
   // 1. Employer Registers Company -> Triggers email to Main Admin!
@@ -547,6 +576,7 @@ Our engineering team was impressed by your ${targetApp.candidatePrimaryPLM} back
         savedJobIds,
         toggleSaveJob,
         registerEmployer,
+        registerCandidate,
         approveEmployer,
         rejectEmployer,
         postJob,

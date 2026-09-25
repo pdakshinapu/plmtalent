@@ -9,7 +9,7 @@ import {
   Check, 
   AlertCircle, 
   ArrowRight,
-  MailCheck,
+  CheckCircle2,
   FileText
 } from 'lucide-react';
 
@@ -163,15 +163,15 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
         {submittedSuccess ? (
           <div className="p-8 text-center space-y-6">
             <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto">
-              <MailCheck className="w-8 h-8" />
+              <CheckCircle2 className="w-8 h-8" />
             </div>
 
             <div className="space-y-2 max-w-md mx-auto">
               <h3 className="text-lg font-bold text-slate-900">
-                Employer Registered & Verification Email Dispatched!
+                Employer Registered & Verification Submitted!
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                An automated priority notification has been emailed to <strong className="text-slate-900 font-mono">admin@plmnexus.internal</strong> with your tax registration (<span className="font-mono">{taxRegistrationNumber}</span>), corporate domain, and PLM credentials.
+                Your enterprise credentials, tax registration (<span className="font-mono">{taxRegistrationNumber}</span>), corporate domain, and PLM stack have been submitted to the Main Admin queue.
               </p>
             </div>
 
@@ -181,7 +181,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
                 <span>What happens next:</span>
               </div>
               <p className="text-amber-800 text-[11px] leading-relaxed">
-                As per platform security governance, you cannot publish public jobs until the Main Admin reviews and verifies your company. You can now switch to the <strong>Main Admin view</strong> to inspect the email and approve your company!
+                As per platform security governance, you cannot publish public jobs until the Main Admin audits and verifies your company. You can switch to the <strong>Main Admin view</strong> to review and approve your company verification.
               </p>
             </div>
 
@@ -512,10 +512,10 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
                 className="px-5 py-2.5 text-xs font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
               >
                 {isSubmitting ? (
-                  <span>Dispatching Email to Admin...</span>
+                  <span>Submitting Registration...</span>
                 ) : (
                   <>
-                    <span>Submit & Notify Main Admin</span>
+                    <span>Submit for Admin Verification</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

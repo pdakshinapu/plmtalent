@@ -7,10 +7,12 @@ import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { CandidateView } from './components/CandidateView';
+import { RegisterCandidateModal } from './components/RegisterCandidateModal';
+import { RegisterEmployerModal } from './components/RegisterEmployerModal';
 import { 
   CheckCircle2, 
   Clock, 
-  Info,
+  Info, 
   X
 } from 'lucide-react';
 
@@ -23,6 +25,8 @@ function AppContent() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>('explore');
+  const [isRegisterCandidateModalOpen, setIsRegisterCandidateModalOpen] = useState(false);
+  const [isRegisterEmployerModalOpen, setIsRegisterEmployerModalOpen] = useState(false);
 
   // Enforce role
   useEffect(() => {
@@ -38,6 +42,8 @@ function AppContent() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+        onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
       />
 
       {/* Main Content Workspace */}
@@ -47,6 +53,21 @@ function AppContent() {
           setActiveTab={setActiveTab}
         />
       </main>
+
+      {/* Candidate Registration Modal */}
+      <RegisterCandidateModal
+        isOpen={isRegisterCandidateModalOpen}
+        onClose={() => setIsRegisterCandidateModalOpen(false)}
+        onSuccess={() => {
+          setActiveTab('explore');
+        }}
+      />
+
+      {/* Employer Registration Modal */}
+      <RegisterEmployerModal
+        isOpen={isRegisterEmployerModalOpen}
+        onClose={() => setIsRegisterEmployerModalOpen(false)}
+      />
 
       {/* Floating Notification Toast */}
       {notificationToast && (

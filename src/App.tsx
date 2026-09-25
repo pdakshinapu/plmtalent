@@ -9,19 +9,14 @@ import { Navbar } from './components/Navbar';
 import { CandidateView } from './components/CandidateView';
 import { EmployerView } from './components/EmployerView';
 import { AdminView } from './components/AdminView';
-import { EmailDrawer } from './components/EmailDrawer';
 import { RegisterEmployerModal } from './components/RegisterEmployerModal';
+import { RegisterCandidateModal } from './components/RegisterCandidateModal';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  ShieldCheck, 
-  Mail, 
-  ArrowRight, 
   CheckCircle2, 
   Clock, 
-  Info,
-  X,
-  Layers,
-  Cpu
+  Info, 
+  X
 } from 'lucide-react';
 
 function AppContent() {
@@ -30,13 +25,12 @@ function AppContent() {
     setRole, 
     notificationToast, 
     dismissToast, 
-    setIsEmailDrawerOpen,
-    unreadEmailCount,
     employers
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>('explore');
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isRegisterEmployerModalOpen, setIsRegisterEmployerModalOpen] = useState(false);
+  const [isRegisterCandidateModalOpen, setIsRegisterCandidateModalOpen] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -61,16 +55,12 @@ function AppContent() {
   };
 
   const handleRoleSwitch = (newRole: string, defaultTab: string) => {
-    setRole(newRole);
+    setRole(newRole as any);
     setActiveTab(defaultTab);
     if (newRole === 'candidate') navigate('/job-seeker');
     if (newRole === 'employer') navigate('/job-provider');
     if (newRole === 'admin') navigate('/admin');
   };
-
-  const pendingVerificationCount = employers.filter(
-    e => e.verificationStatus === 'pending_verification'
-  ).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-slate-900 selection:text-white">
@@ -79,7 +69,8 @@ function AppContent() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleRoleTabSync}
-        onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
+        onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
+        onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
       />
 
       {/* Main Content Workspace by Role */}
@@ -90,38 +81,43 @@ function AppContent() {
             <CandidateView
               activeTab={activeTab}
               setActiveTab={setActiveTab}
+              onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+              onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
             />
           } />
           <Route path="/job-provider/*" element={
             <EmployerView
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
+              onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
+              onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
             />
           } />
           <Route path="/admin/*" element={
             <AdminView
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
+              onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
             />
           } />
         </Routes>
       </main>
 
-      {/* Enterprise Registration Modal */}
+      {/* Enterprise / Job Provider Registration Modal */}
       <RegisterEmployerModal
-        isOpen={isRegisterModalOpen}
-        onClose={() => setIsRegisterModalOpen(false)}
+        isOpen={isRegisterEmployerModalOpen}
+        onClose={() => setIsRegisterEmployerModalOpen(false)}
         onSuccessSwitchToAdmin={() => {
           handleRoleSwitch('admin', 'verification-queue');
         }}
       />
 
-      {/* Transactional Email Dispatch Simulator Drawer */}
-      <EmailDrawer
-        onNavigateToAdminVerification={() => {
-          handleRoleSwitch('admin', 'verification-queue');
+      {/* Candidate / Job Seeker Registration Modal */}
+      <RegisterCandidateModal
+        isOpen={isRegisterCandidateModalOpen}
+        onClose={() => setIsRegisterCandidateModalOpen(false)}
+        onSuccess={() => {
+          handleRoleSwitch('candidate', 'explore');
         }}
       />
 
@@ -151,7 +147,7 @@ function AppContent() {
         </div>
       )}
 
-      {/* Production Grade Clean Footer (No Ornamental Clutter) */}
+      {/* Production Grade Clean Footer */}
       <footer className="border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -160,13 +156,8 @@ function AppContent() {
             <span>Dedicated Talent Platform for Teamcenter, Windchill, 3DEXPERIENCE & Aras</span>
           </div>
 
-          <div className="flex items-center gap-6 font-medium">
-            <button
-              onClick={() => setIsEmailDrawerOpen(true)}
-              className="text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              Audit Mail Dispatch
-            </button>
+          <div className="flex items-center gap-6 font-medium text-slate-400">
+            <span>Enterprise Verification & Talent Governance</span>
           </div>
         </div>
       </footer>
