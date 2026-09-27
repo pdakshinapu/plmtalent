@@ -11,6 +11,9 @@ import { EmployerView } from './components/EmployerView';
 import { AdminView } from './components/AdminView';
 import { RegisterEmployerModal } from './components/RegisterEmployerModal';
 import { RegisterCandidateModal } from './components/RegisterCandidateModal';
+import { LandingPage } from './components/LandingPage';
+import { AuthPage } from './components/AuthPage';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { 
   CheckCircle2, 
@@ -65,7 +68,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-slate-900 selection:text-white">
       
-      {/* Main 3-Zone Top Navigation Bar */}
+      {/* Main Top Navigation Bar */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleRoleTabSync}
@@ -73,33 +76,68 @@ function AppContent() {
         onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
       />
 
-      {/* Main Content Workspace by Role */}
+      {/* Main Content Workspace */}
       <main className="flex-1 pb-16">
         <Routes>
-          <Route path="/" element={<Navigate to="/job-seeker" replace />} />
+          {/* Base URL: Landing Page */}
+          <Route 
+            path="/" 
+            element={
+              <LandingPage 
+                onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+                onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
+              />
+            } 
+          />
+
+          {/* Authentication & Role-based Login */}
+          <Route 
+            path="/login" 
+            element={
+              <AuthPage 
+                onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+                onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
+              />
+            } 
+          />
+
+          {/* Job Seeker Portal with Role Guard */}
           <Route path="/job-seeker/*" element={
-            <CandidateView
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
-              onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
-            />
+            <ProtectedRoute requiredRole="candidate">
+              <CandidateView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+                onOpenRegisterEmployerModal={() => setIsRegisterEmployerModalOpen(true)}
+              />
+            </ProtectedRoute>
           } />
+
+          {/* Job Provider (Enterprise) Portal with Role Guard */}
           <Route path="/job-provider/*" element={
-            <EmployerView
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
-              onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
-            />
+            <ProtectedRoute requiredRole="employer">
+              <EmployerView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
+                onOpenRegisterCandidateModal={() => setIsRegisterCandidateModalOpen(true)}
+              />
+            </ProtectedRoute>
           } />
+
+          {/* Platform Administrator Governance Portal with Role Guard */}
           <Route path="/admin/*" element={
-            <AdminView
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
-            />
+            <ProtectedRoute requiredRole="admin">
+              <AdminView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onOpenRegisterModal={() => setIsRegisterEmployerModalOpen(true)}
+              />
+            </ProtectedRoute>
           } />
+
+          {/* Catch-all fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 

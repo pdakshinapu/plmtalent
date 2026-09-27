@@ -8,7 +8,8 @@ export type PLMSystem =
   | 'SAP PLM'
   | 'Autodesk Fusion / Upchain'
   | 'Arena PLM'
-  | 'Agile PLM';
+  | 'Agile PLM'
+  | (string & {});
 
 export type PLMModule = 
   | 'BOM & Part Architecture'
@@ -20,7 +21,8 @@ export type PLMModule =
   | 'Manufacturing Process (MPP)'
   | 'Quality & CAPA'
   | 'Supplier Collaboration'
-  | 'Data Migration & ETL';
+  | 'Data Migration & ETL'
+  | (string & {});
 
 export type CADTool = 
   | 'Siemens NX'
@@ -28,11 +30,19 @@ export type CADTool =
   | 'PTC Creo'
   | 'SolidWorks'
   | 'Autodesk Inventor'
-  | 'Altium Designer';
+  | 'Altium Designer'
+  | (string & {});
 
 export type ClearanceLevel = 'None' | 'ITAR / Export Controlled' | 'Secret' | 'Top Secret';
 
 export type VerificationStatus = 'verified' | 'pending_verification' | 'under_review' | 'rejected';
+
+export interface CandidateProfileVisibility {
+  contact: boolean;
+  platforms: boolean;
+  modules: boolean;
+  compensation: boolean;
+}
 
 export interface CandidateProfile {
   id: string;
@@ -57,6 +67,7 @@ export interface CandidateProfile {
   avatarInitials: string;
   accentColor: string;
   resumeFileName?: string;
+  profileVisibility?: CandidateProfileVisibility;
   portfolioProjects: {
     title: string;
     system: string;
@@ -141,4 +152,12 @@ export interface Application {
   resumeFileName: string;
   status: 'applied' | 'screening' | 'technical_interview' | 'offer_extended' | 'archived';
   internalNotes?: string;
+}
+
+export interface UserSession {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  companyName?: string;
 }

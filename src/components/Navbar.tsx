@@ -7,16 +7,18 @@ import {
   Building2, 
   CheckCircle2, 
   Clock, 
-  ChevronDown, 
   Sparkles, 
   Layers, 
   FileCheck,
-  UserPlus,
-  UserCheck,
-  ArrowRight,
-  ExternalLink
+  ExternalLink,
+  LogIn,
+  LogOut,
+  User,
+  ChevronDown,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavbarProps {
   activeTab: string;
@@ -37,44 +39,46 @@ export const Navbar: React.FC<NavbarProps> = ({
     role, 
     currentEmployer,
     employers,
-    setCurrentEmployerId
+    setCurrentEmployerId,
+    userSession,
+    logout
   } = useApp();
 
   const navigate = useNavigate();
-  const [isRegisterDropdownOpen, setIsRegisterDropdownOpen] = useState(false);
-  const [isEmployerDropdownOpen, setIsEmployerDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const employerDropdownRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   const pendingVerificationCount = employers.filter(e => e.verificationStatus === 'pending_verification').length;
+  const isLandingPage = location.pathname === '/';
+  const isAuthPage = location.pathname.startsWith('/login');
 
-  const handleOpenEmployerModal = () => {
-    setIsRegisterDropdownOpen(false);
-    if (onOpenRegisterEmployerModal) {
-      onOpenRegisterEmployerModal();
-    } else if (onOpenRegisterModal) {
-      onOpenRegisterModal();
-    }
-  };
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleOpenCandidateModal = () => {
-    setIsRegisterDropdownOpen(false);
-    onOpenRegisterCandidateModal();
-  };
-
-  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsRegisterDropdownOpen(false);
-      }
-      if (employerDropdownRef.current && !employerDropdownRef.current.contains(event.target as Node)) {
-        setIsEmployerDropdownOpen(false);
+        setIsProfileDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleOpenVerificationCredentials = () => {
+    setIsProfileDropdownOpen(false);
+    setActiveTab('company-profile');
+    if (location.pathname !== '/job-provider') {
+      navigate('/job-provider');
+    }
+  };
+
+  const handleOpenCandidateProfile = () => {
+    setIsProfileDropdownOpen(false);
+    setActiveTab('profile');
+    if (location.pathname !== '/job-seeker') {
+      navigate('/job-seeker');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
@@ -85,18 +89,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-3">
             <button 
               onClick={() => {
-                if (role === 'candidate') {
-                  setActiveTab('explore');
-                  navigate('/job-seeker');
-                } else if (role === 'employer') {
-                  setActiveTab('dashboard');
-                  navigate('/job-provider');
-                } else {
-                  setActiveTab('verification-queue');
-                  navigate('/admin');
-                }
+                navigate('/');
               }}
-              className="flex items-center gap-2.5 text-left group focus:outline-none"
+              className="flex items-center gap-2.5 text-left group focus:outline-none cursor-pointer"
             >
               <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm group-hover:bg-slate-800 transition-colors">
                 PLM
@@ -111,16 +106,56 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* ZONE 2: Clean navigation links */}
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600">
-            {role === 'candidate' && (
+            {isAuthPage ? (
+              <button
+                onClick={() => navigate('/')}
+                className="transition-colors hover:text-slate-900 font-medium cursor-pointer"
+              >
+                ← Return to Platform Overview
+              </button>
+            ) : !userSession || isLandingPage ? (
               <>
                 <button
-                  onClick={() => setActiveTab('explore')}
-                  className={`transition-colors hover:text-slate-900 ${
-                    activeTab === 'explore' ? 'text-slate-950 font-semibold' : ''
+                  onClick={() => navigate('/')}
+                  className={`transition-colors hover:text-slate-900 cursor-pointer ${
+                    isLandingPage ? 'text-slate-950 font-bold' : ''
                   }`}
                 >
-                  Explore PLM Jobs
+                  Overview
                 </button>
+                <button
+                  onClick={() => navigate(userSession ? '/job-seeker' : '/login?role=candidate')}
+                  className="transition-colors hover:text-slate-900 cursor-pointer"
+                >
+                  Find Jobs
+                </button>
+                <button
+                  onClick={() => navigate(userSession ? '/job-provider' : '/login?role=employer')}
+                  className="transition-colors hover:text-slate-900 cursor-pointer"
+                >
+                  Hire Talent
+                </button>
+                {userSession?.role === 'admin' && (
+                  <button
+                    onClick={() => navigate('/admin')}
+                    className="transition-colors hover:text-amber-600 font-semibold cursor-pointer"
+                  >
+                    Governance
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {role === 'candidate' && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('explore')}
+                      className={`transition-colors hover:text-slate-900 cursor-pointer ${
+                        activeTab === 'explore' ? 'text-slate-950 font-semibold' : ''
+                      }`}
+                    >
+                      Explore PLM Jobs
+                    </button>
                 <button
                   onClick={() => setActiveTab('applications')}
                   className={`transition-colors hover:text-slate-900 ${
@@ -128,14 +163,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   My Applications
-                </button>
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className={`transition-colors hover:text-slate-900 ${
-                    activeTab === 'profile' ? 'text-slate-950 font-semibold' : ''
-                  }`}
-                >
-                  PLM Profile & Skills
                 </button>
               </>
             )}
@@ -151,28 +178,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Enterprise Overview
                 </button>
                 <button
-                  onClick={() => setActiveTab('post-job')}
+                  onClick={() => setActiveTab('search-candidates')}
                   className={`transition-colors hover:text-slate-900 ${
-                    activeTab === 'post-job' ? 'text-slate-950 font-semibold' : ''
+                    activeTab === 'search-candidates' ? 'text-slate-950 font-semibold' : ''
                   }`}
                 >
-                  Publish PLM Job
+                  Search Job Seekers
                 </button>
                 <button
-                  onClick={() => setActiveTab('pipeline')}
-                  className={`transition-colors hover:text-slate-900 ${
-                    activeTab === 'pipeline' ? 'text-slate-950 font-semibold' : ''
+                  onClick={() => setActiveTab('published-jobs')}
+                  className={`transition-colors hover:text-slate-900 cursor-pointer ${
+                    activeTab === 'published-jobs' || activeTab === 'pipeline' || activeTab === 'post-job' ? 'text-slate-950 font-semibold' : ''
                   }`}
                 >
-                  Applicant ATS
-                </button>
-                <button
-                  onClick={() => setActiveTab('company-profile')}
-                  className={`transition-colors hover:text-slate-900 ${
-                    activeTab === 'company-profile' ? 'text-slate-950 font-semibold' : ''
-                  }`}
-                >
-                  Verification Credentials
+                  Published Jobs
                 </button>
               </>
             )}
@@ -208,161 +227,212 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   PLM Market Analytics
                 </button>
+                <button
+                  onClick={() => setActiveTab('platform-settings')}
+                  className={`transition-colors hover:text-slate-900 ${
+                    activeTab === 'platform-settings' ? 'text-slate-950 font-semibold' : ''
+                  }`}
+                >
+                  Platform Settings
+                </button>
               </>
             )}
-          </nav>
+          </>
+        )}
+      </nav>
 
-          {/* ZONE 3: Registration Modals Trigger & Active Identity */}
-          <div className="flex items-center gap-2.5">
+          {/* ZONE 3: Auth & Identity Actions */}
+          <div className="flex items-center gap-3">
 
-            {/* Active Employer Badge (When in Employer Role) */}
-            {role === 'employer' && currentEmployer && (
-              <div ref={employerDropdownRef} className="relative">
-                <button
-                  onClick={() => setIsEmployerDropdownOpen(!isEmployerDropdownOpen)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-2xs"
-                >
-                  <div className={`w-5 h-5 rounded text-white text-[10px] flex items-center justify-center font-bold ${currentEmployer.logoBg}`}>
-                    {currentEmployer.logoInitials}
-                  </div>
-                  <span className="font-semibold text-slate-800 max-w-[110px] truncate">
-                    {currentEmployer.companyName}
-                  </span>
-                  {currentEmployer.verificationStatus === 'verified' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  ) : (
-                    <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+
+
+            {/* AUTH / LOGIN & LOGOUT ACTIONS */}
+            {!userSession ? (
+              <button
+                id="navbar-login-btn"
+                onClick={() => navigate('/login')}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 text-blue-100" />
+                <span>Login</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                {/* Profile Button with Verification Credentials Popover */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    id="navbar-profile-btn"
+                    onClick={() => setIsProfileDropdownOpen(prev => !prev)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer select-none ${
+                      isProfileDropdownOpen || (role === 'employer' && activeTab === 'company-profile')
+                        ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 hover:border-slate-300'
+                    }`}
+                    title={userSession.role === 'employer' ? 'Open Verification Credentials' : 'Open Profile'}
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                      {userSession.name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
+                        <span>{userSession.name}</span>
+                        {userSession.role === 'employer' && currentEmployer?.verificationStatus === 'verified' && (
+                          <span title="Verified Enterprise"><CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /></span>
+                        )}
+                        {userSession.role === 'employer' && currentEmployer?.verificationStatus === 'pending_verification' && (
+                          <span title="Verification Pending"><Clock className="w-3 h-3 text-amber-600 shrink-0" /></span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        {userSession.role === 'candidate' ? 'Job Seeker' : userSession.role === 'employer' ? 'Job Provider' : 'Admin'}
+                      </div>
+                    </div>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isProfileDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                  </button>
+
+                  {/* Dropdown Popover */}
+                  {isProfileDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                      
+                      {/* Dropdown User Header */}
+                      <div className="p-4 bg-slate-50 border-b border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center shadow-xs">
+                            {userSession.name?.charAt(0) || 'U'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-bold text-slate-900 truncate">
+                              {userSession.name}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {userSession.email}
+                            </div>
+                            <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                              {userSession.role === 'candidate' ? 'Job Seeker' : userSession.role === 'employer' ? 'Job Provider' : 'Platform Admin'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* EMPLOYER: VERIFICATION CREDENTIALS SECTION */}
+                      {userSession.role === 'employer' && (
+                        <div className="p-4 space-y-3 border-b border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              Verification Credentials
+                            </span>
+                            {currentEmployer?.verificationStatus === 'verified' && (
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                Verified
+                              </span>
+                            )}
+                            {currentEmployer?.verificationStatus === 'pending_verification' && (
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                Pending Audit
+                              </span>
+                            )}
+                            {currentEmployer?.verificationStatus === 'rejected' && (
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                Rejected
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1.5">
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-[11px] text-slate-400">Enterprise:</span>
+                              <span className="font-semibold text-slate-900 truncate max-w-[160px]">
+                                {currentEmployer?.companyName || userSession.companyName || 'Registered Enterprise'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-[11px] text-slate-400">Domain:</span>
+                              <span className="font-mono text-slate-800 text-[11px]">
+                                {currentEmployer?.corporateDomain || userSession.email.split('@')[1] || 'domain.com'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-slate-600">
+                              <span className="text-[11px] text-slate-400">Tax EIN:</span>
+                              <span className="font-mono text-slate-800 text-[11px]">
+                                {currentEmployer?.taxRegistrationNumber || 'EIN-PENDING'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={handleOpenVerificationCredentials}
+                            className="w-full px-3 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl flex items-center justify-between transition-colors shadow-xs cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                              <span>Open Verification Credentials</span>
+                            </span>
+                            <span className="text-slate-400 font-mono text-[10px]">→</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* CANDIDATE: PROFILE SECTION */}
+                      {userSession.role === 'candidate' && (
+                        <div className="p-4 space-y-3 border-b border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              Candidate Profile
+                            </span>
+                            <span className="flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                              Verified Specialist
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={handleOpenCandidateProfile}
+                            className="w-full px-3 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl flex items-center justify-between transition-colors shadow-xs cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <User className="w-4 h-4 text-blue-400" />
+                              <span>Open PLM Profile & Skills</span>
+                            </span>
+                            <span className="text-slate-400 font-mono text-[10px]">→</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Dropdown Footer with Logout */}
+                      <div className="p-2 bg-slate-50 border-t border-slate-100">
+                        <button
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false);
+                            logout();
+                            navigate('/');
+                          }}
+                          className="w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+
+                    </div>
                   )}
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
-                </button>
+                </div>
 
-                {isEmployerDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Switch Active Company
-                    </div>
-                    {employers.map(emp => (
-                      <button
-                        key={emp.id}
-                        onClick={() => {
-                          setCurrentEmployerId(emp.id);
-                          setIsEmployerDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                          emp.id === currentEmployer.id ? 'bg-slate-50 font-semibold text-slate-900' : 'text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`w-5 h-5 rounded text-white text-[10px] flex items-center justify-center font-bold shrink-0 ${emp.logoBg}`}>
-                            {emp.logoInitials}
-                          </span>
-                          <span className="truncate">{emp.companyName}</span>
-                        </div>
-                        <span className="text-[10px] shrink-0 ml-2">
-                          {emp.verificationStatus === 'verified' ? (
-                            <span className="text-emerald-600 font-semibold">Verified</span>
-                          ) : (
-                            <span className="text-amber-600 font-semibold">Pending</span>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                    <div className="border-t border-slate-100 mt-1 pt-1 px-1">
-                      <button
-                        onClick={() => {
-                          setIsEmployerDropdownOpen(false);
-                          handleOpenEmployerModal();
-                        }}
-                        className="w-full px-2.5 py-1.5 text-left text-xs text-blue-600 hover:bg-blue-50 font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
-                      >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>+ Register New Enterprise</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* DUAL REGISTRATION DROPDOWN BUTTON: Direct access to registrations (shown for employer & admin only) */}
-            {role !== 'candidate' && (
-              <div ref={dropdownRef} className="relative">
                 <button
-                  onClick={() => setIsRegisterDropdownOpen(!isRegisterDropdownOpen)}
-                  className="px-3 py-2 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs"
-                  title="Register as Job Seeker or Job Provider"
+                  id="navbar-logout-btn"
+                  onClick={() => {
+                    logout();
+                    navigate('/');
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Sign out of account"
                 >
-                  <UserPlus className="w-3.5 h-3.5 text-slate-700" />
-                  <span>Register</span>
-                  <ChevronDown className="w-3 h-3 text-slate-500" />
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
                 </button>
-
-                {isRegisterDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border border-slate-200 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
-                      Select Registration Type
-                    </div>
-
-                    {/* Option 1: Job Seeker Registration */}
-                    <button
-                      onClick={handleOpenCandidateModal}
-                      className="w-full text-left p-3 rounded-xl hover:bg-blue-50/70 border border-transparent hover:border-blue-100 transition-all group flex items-start gap-3"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                        <UserCheck className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 group-hover:text-blue-900 flex items-center gap-1">
-                          <span>Register as Job Seeker</span>
-                          <ArrowRight className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                          Build your verified PLM specialist profile to apply with 1-click.
-                        </p>
-                      </div>
-                    </button>
-
-                    {/* Option 2: Job Provider (Employer) Registration */}
-                    <button
-                      onClick={handleOpenEmployerModal}
-                      className="w-full text-left p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group flex items-start gap-3 mt-1"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                        <Building2 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                          <span>Register as Job Provider</span>
-                          <ArrowRight className="w-3 h-3 text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                          Register company legal entity, tax ID & PLM stack for admin audit.
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                )}
               </div>
-            )}
-
-            {role === 'employer' && (
-              <button
-                onClick={handleOpenEmployerModal}
-                className="hidden sm:inline-flex px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-2xs items-center gap-1.5"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>+ Register Company</span>
-              </button>
-            )}
-
-            {role === 'admin' && (
-              <button
-                onClick={() => setActiveTab('verification-queue')}
-                className="hidden sm:inline-flex px-3.5 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-2xs items-center gap-1.5"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>Review Pending ({pendingVerificationCount})</span>
-              </button>
             )}
 
           </div>

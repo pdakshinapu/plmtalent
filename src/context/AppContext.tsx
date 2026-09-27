@@ -4,33 +4,44 @@ import {
   CandidateProfile, 
   EmployerProfile, 
   Job, 
-  Application
+  Application,
+  UserSession
 } from '../types';
+import { auth, db, googleProvider } from '../firebase';
 import { 
-  INITIAL_EMPLOYERS, 
-  INITIAL_CANDIDATE, 
-  INITIAL_JOBS, 
-  INITIAL_APPLICATIONS
-} from '../services/mockData';
-import { auth } from '../firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signInWithPopup,
+  signOut, 
+  onAuthStateChanged, 
+  User 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
+  COLLECTIONS,
   purgeDummyDataFromFirestore,
   subscribeToEmployers,
   subscribeToJobs,
   subscribeToApplications,
   subscribeToCandidate,
+  subscribeToCandidates,
   saveEmployerToFirestore,
   saveJobToFirestore,
   saveApplicationToFirestore,
   updateCandidateInFirestore,
 } from '../services/firebaseService';
+import {
+  PlatformChoices,
+  DEFAULT_CHOICES,
+  subscribeToPlatformChoices,
+} from '../services/choicesService';
 
 interface AppContextType {
   role: UserRole;
   setRole: (role: UserRole) => void;
-  candidate: CandidateProfile;
+  candidate: CandidateProfile | null;
   updateCandidate: (data: Partial<CandidateProfile>) => void;
+  allCandidates: CandidateProfile[];
   employers: EmployerProfile[];
   currentEmployerId: string;
   setCurrentEmployerId: (id: string) => void;
@@ -49,12 +60,20 @@ interface AppContextType {
   notificationToast: { message: string; type: 'success' | 'info' | 'warning' } | null;
   dismissToast: () => void;
   currentUser: User | null;
+  userSession: UserSession | null;
+  isAuthReady: boolean;
+  login: (email: string, password: string, targetRole: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
+  signUp: (email: string, password: string, targetRole: UserRole, name?: string, companyName?: string) => Promise<{ success: boolean; message?: string }>;
+  loginWithGoogle: (targetRole: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
+  logout: () => Promise<void>;
   isFirebaseConnected: boolean;
+  // Dynamic platform choices managed by admin
+  platformChoices: PlatformChoices;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Purge obsolete mock storage keys
+// Purge any obsolete mock storage keys completely
 if (typeof window !== 'undefined') {
   const legacyKeys = [
     'plm_nexus_employers_v2',
@@ -65,59 +84,83 @@ if (typeof window !== 'undefined') {
     'plm_nexus_emails_v2',
     'plm_nexus_saved_jobs_v2',
     'plm_nexus_emails_clean',
+    'plm_nexus_candidate_clean',
+    'plm_nexus_employers_clean',
+    'plm_nexus_curr_emp_id_clean',
+    'plm_nexus_jobs_clean',
+    'plm_nexus_applications_clean',
+    'plm_nexus_saved_jobs_clean',
+    'plm_nexus_user_session_clean',
+    'plm_nexus_role_clean',
   ];
   legacyKeys.forEach(k => localStorage.removeItem(k));
 }
+const createDefaultCandidateProfile = (userId: string, userName: string, userEmail: string): CandidateProfile => ({
+  id: userId,
+  name: userName,
+  headline: '',
+  email: userEmail,
+  phone: '',
+  location: '',
+  yearsOfExperience: 0,
+  primaryPLM: 'Siemens Teamcenter',
+  secondaryPLMs: [],
+  modules: [],
+  cadTools: [],
+  clearance: 'None',
+  certifications: [],
+  currentCompany: '',
+  currentRole: '',
+  expectedCompensation: '',
+  availableFrom: '',
+  bio: '',
+  verifiedSpecialist: true,
+  avatarInitials: (userName.trim().slice(0, 2) || 'PLM').toUpperCase(),
+  accentColor: 'from-blue-600 to-indigo-600',
+  portfolioProjects: []
+});
 
-const STORAGE_KEYS = {
-  ROLE: 'plm_nexus_role_clean',
-  EMPLOYERS: 'plm_nexus_employers_clean',
-  CURRENT_EMP_ID: 'plm_nexus_curr_emp_id_clean',
-  CANDIDATE: 'plm_nexus_candidate_clean',
-  JOBS: 'plm_nexus_jobs_clean',
-  APPLICATIONS: 'plm_nexus_applications_clean',
-  SAVED_JOBS: 'plm_nexus_saved_jobs_clean',
+const createDefaultEmployerProfile = (userId: string, companyName: string, userName: string, userEmail: string): EmployerProfile => {
+  const company = companyName.trim() || `${userName}'s Organization`;
+  return {
+    id: userId,
+    companyName: company,
+    legalEntity: company,
+    corporateDomain: userEmail.includes('@') ? userEmail.split('@')[1] : '',
+    contactPerson: userName,
+    contactTitle: '',
+    contactEmail: userEmail,
+    adminEmail: userEmail,
+    industry: 'Aerospace & Defense',
+    headquarters: '',
+    companySize: '10 - 50 employees',
+    website: '',
+    primaryPLMStack: [],
+    cadEnvironments: [],
+    verificationStatus: 'pending_verification',
+    verificationRequestedAt: new Date().toISOString(),
+    taxRegistrationNumber: '',
+    logoInitials: (company.slice(0, 2) || 'EM').toUpperCase(),
+    logoBg: 'bg-indigo-600',
+    about: ''
+  };
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRoleState] = useState<UserRole>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ROLE);
-    return (saved as UserRole) || 'candidate';
-  });
-
-  const [employers, setEmployers] = useState<EmployerProfile[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.EMPLOYERS);
-    return saved ? JSON.parse(saved) : INITIAL_EMPLOYERS;
-  });
-
-  const [currentEmployerId, setCurrentEmployerIdState] = useState<string>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_EMP_ID);
-    return saved || '';
-  });
-
-  const [candidate, setCandidate] = useState<CandidateProfile>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CANDIDATE);
-    return saved ? JSON.parse(saved) : INITIAL_CANDIDATE;
-  });
-
-  const [jobs, setJobs] = useState<Job[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.JOBS);
-    return saved ? JSON.parse(saved) : INITIAL_JOBS;
-  });
-
-  const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.APPLICATIONS);
-    return saved ? JSON.parse(saved) : INITIAL_APPLICATIONS;
-  });
-
-  const [savedJobIds, setSavedJobIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SAVED_JOBS);
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [role, setRoleState] = useState<UserRole>('candidate');
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
+  const [allCandidates, setAllCandidates] = useState<CandidateProfile[]>([]);
+  const [employers, setEmployers] = useState<EmployerProfile[]>([]);
+  const [currentEmployerId, setCurrentEmployerIdState] = useState<string>('');
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
+  const [platformChoices, setPlatformChoices] = useState<PlatformChoices>(DEFAULT_CHOICES);
 
   // Initialize Firebase listeners and purge any old dummy data
   useEffect(() => {
@@ -125,8 +168,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Purge dummy data:', err);
     });
 
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+    // Real Firebase Auth state listener
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setCurrentUser(firebaseUser);
+        try {
+          const userDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
+          const userSnap = await getDoc(userDocRef);
+          let assignedRole: UserRole = 'candidate';
+          let userName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'PLM Specialist');
+          let companyName: string | undefined = undefined;
+
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.role) assignedRole = data.role as UserRole;
+            if (data.name) userName = data.name;
+            if (data.companyName) companyName = data.companyName;
+          }
+
+          const session: UserSession = {
+            id: firebaseUser.uid,
+            name: userName,
+            email: firebaseUser.email || '',
+            role: assignedRole,
+            companyName
+          };
+
+          setUserSession(session);
+          setRoleState(assignedRole);
+
+          // If role is candidate, fetch their profile from Firestore
+          if (assignedRole === 'candidate') {
+            const candDocRef = doc(db, COLLECTIONS.CANDIDATES, firebaseUser.uid);
+            const candSnap = await getDoc(candDocRef);
+            if (candSnap.exists()) {
+              setCandidate(candSnap.data() as CandidateProfile);
+            } else {
+              const newCand = createDefaultCandidateProfile(firebaseUser.uid, userName, firebaseUser.email || '');
+              await updateCandidateInFirestore(newCand);
+              setCandidate(newCand);
+            }
+          }
+
+          // If role is employer, activate their company ID
+          if (assignedRole === 'employer') {
+            setCurrentEmployerIdState(firebaseUser.uid);
+          }
+        } catch (e) {
+          console.warn('Auth state sync error:', e);
+        }
+      } else {
+        // User is completely logged out - no dummy data
+        setCurrentUser(null);
+        setUserSession(null);
+        setCandidate(null);
+      }
+      setIsAuthReady(true);
     });
 
     const unsubEmployers = subscribeToEmployers((liveEmployers) => {
@@ -144,10 +241,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setApplications(liveApps);
     });
 
-    const unsubCandidate = subscribeToCandidate(candidate.id || 'cand-01', (liveCandidate) => {
-      if (liveCandidate) {
-        setCandidate(liveCandidate);
-      }
+    const unsubCandidates = subscribeToCandidates((liveCandidates) => {
+      setAllCandidates(liveCandidates);
+    });
+
+    const unsubChoices = subscribeToPlatformChoices((choices) => {
+      setPlatformChoices(choices);
     });
 
     return () => {
@@ -155,38 +254,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubEmployers();
       unsubJobs();
       unsubApplications();
-      unsubCandidate();
+      unsubCandidates();
+      unsubChoices();
     };
   }, []);
 
-  // Sync state to clean LocalStorage
+  // Real-time listener for the active candidate profile when logged in as candidate
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ROLE, role);
-  }, [role]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.EMPLOYERS, JSON.stringify(employers));
-  }, [employers]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_EMP_ID, currentEmployerId);
-  }, [currentEmployerId]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CANDIDATE, JSON.stringify(candidate));
-  }, [candidate]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(jobs));
-  }, [jobs]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.APPLICATIONS, JSON.stringify(applications));
-  }, [applications]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SAVED_JOBS, JSON.stringify(savedJobIds));
-  }, [savedJobIds]);
+    if (!currentUser || userSession?.role !== 'candidate') return;
+    const unsub = subscribeToCandidate(currentUser.uid, (liveCandidate) => {
+      if (liveCandidate) {
+        setCandidate(liveCandidate);
+      }
+    });
+    return () => unsub();
+  }, [currentUser, userSession?.role]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'info') => {
     setNotificationToast({ message, type });
@@ -199,7 +281,240 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
-    showToast(`Switched view to ${newRole === 'candidate' ? 'Job Seeker (Candidate)' : newRole === 'employer' ? 'Job Provider (Employer)' : 'Main Admin (Governance)'}`, 'info');
+    if (userSession) {
+      setUserSession({ ...userSession, role: newRole });
+    }
+  };
+
+  // Sign In using real Firebase Authentication
+  const login = async (email: string, password: string, targetRole: UserRole): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      // Sync user profile in Firestore
+      const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
+      const userSnap = await getDoc(userDocRef);
+      let assignedRole = targetRole;
+      let userName = user.displayName || email.split('@')[0];
+      let companyName: string | undefined = undefined;
+
+      if (userSnap.exists()) {
+        const udata = userSnap.data();
+        if (udata.role) assignedRole = udata.role as UserRole;
+        if (udata.name) userName = udata.name;
+        if (udata.companyName) companyName = udata.companyName;
+      } else {
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          role: assignedRole,
+          name: userName,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      if (assignedRole === 'candidate') {
+        const candDocRef = doc(db, COLLECTIONS.CANDIDATES, user.uid);
+        const candSnap = await getDoc(candDocRef);
+        if (candSnap.exists()) {
+          setCandidate(candSnap.data() as CandidateProfile);
+        } else {
+          const newCand = createDefaultCandidateProfile(user.uid, userName, user.email || '');
+          await updateCandidateInFirestore(newCand);
+          setCandidate(newCand);
+        }
+      }
+
+      if (assignedRole === 'employer') {
+        setCurrentEmployerIdState(user.uid);
+      }
+
+      const session: UserSession = {
+        id: user.uid,
+        name: userName,
+        email: user.email || email,
+        role: assignedRole,
+        companyName
+      };
+
+      setUserSession(session);
+      setRoleState(assignedRole);
+      showToast(`Welcome back, ${userName}! Verified via Firebase Authentication.`, 'success');
+      return { success: true, role: assignedRole };
+    } catch (err: any) {
+      console.error('Firebase Auth Login Error:', err);
+      let userFriendlyMsg = 'Authentication failed. Please verify your credentials.';
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        userFriendlyMsg = 'Invalid email or password. If you do not have an account yet, click "Create Account".';
+      } else if (err.code === 'auth/too-many-requests') {
+        userFriendlyMsg = 'Too many attempts. Access temporarily disabled. Try again shortly.';
+      } else if (err.code === 'auth/network-request-failed') {
+        userFriendlyMsg = 'Network error. Please check your internet connection.';
+      } else if (err.message) {
+        userFriendlyMsg = err.message;
+      }
+      return { success: false, message: userFriendlyMsg };
+    }
+  };
+
+  // Create new Account using real Firebase Authentication
+  const signUp = async (
+    email: string, 
+    password: string, 
+    targetRole: UserRole, 
+    name?: string, 
+    companyName?: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+      const userName = name?.trim() || email.split('@')[0];
+
+      // Save user record to Firestore users collection
+      const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        email: user.email,
+        role: targetRole,
+        name: userName,
+        companyName: companyName?.trim() || '',
+        createdAt: new Date().toISOString()
+      });
+
+      // Role specific profile creation
+      if (targetRole === 'candidate') {
+        const newCand = createDefaultCandidateProfile(user.uid, userName, user.email || '');
+        await updateCandidateInFirestore(newCand);
+        setCandidate(newCand);
+      } else if (targetRole === 'employer') {
+        const newEmp = createDefaultEmployerProfile(user.uid, companyName || '', userName, user.email || '');
+        await saveEmployerToFirestore(newEmp);
+        setCurrentEmployerIdState(user.uid);
+      }
+
+      const session: UserSession = {
+        id: user.uid,
+        name: userName,
+        email: user.email || email,
+        role: targetRole,
+        companyName
+      };
+
+      setUserSession(session);
+      setRoleState(targetRole);
+      showToast(`Account successfully created for ${userName}! Signed into Firebase.`, 'success');
+      return { success: true };
+    } catch (err: any) {
+      console.error('Firebase Auth Sign Up Error:', err);
+      let userFriendlyMsg = 'Could not create account.';
+      if (err.code === 'auth/email-already-in-use') {
+        userFriendlyMsg = 'This email is already registered. Please switch to "Sign In" instead.';
+      } else if (err.code === 'auth/weak-password') {
+        userFriendlyMsg = 'Password must be at least 6 characters.';
+      } else if (err.code === 'auth/invalid-email') {
+        userFriendlyMsg = 'Please enter a valid email address.';
+      } else if (err.message) {
+        userFriendlyMsg = err.message;
+      }
+      return { success: false, message: userFriendlyMsg };
+    }
+  };
+
+  // Sign In / Sign Up with a Google account. If this Google account already has a
+  // user record in Firestore, that record's saved role is used (an account keeps
+  // the role it was originally created with). Otherwise a new user record and a
+  // matching candidate/employer profile are created dynamically from the Google profile.
+  const loginWithGoogle = async (targetRole: UserRole): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      let assignedRole: UserRole = targetRole;
+      let userName = user.displayName || (user.email ? user.email.split('@')[0] : 'PLM Specialist');
+      let companyName: string | undefined = undefined;
+      const isNewUser = !userSnap.exists();
+
+      if (!isNewUser) {
+        const udata = userSnap.data();
+        if (udata.role) assignedRole = udata.role as UserRole;
+        if (udata.name) userName = udata.name;
+        if (udata.companyName) companyName = udata.companyName;
+      } else {
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          role: assignedRole,
+          name: userName,
+          photoURL: user.photoURL || '',
+          authProvider: 'google',
+          companyName: companyName || '',
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      if (assignedRole === 'candidate') {
+        const candDocRef = doc(db, COLLECTIONS.CANDIDATES, user.uid);
+        const candSnap = await getDoc(candDocRef);
+        if (candSnap.exists()) {
+          setCandidate(candSnap.data() as CandidateProfile);
+        } else {
+          const newCand = createDefaultCandidateProfile(user.uid, userName, user.email || '');
+          await updateCandidateInFirestore(newCand);
+          setCandidate(newCand);
+        }
+      } else if (assignedRole === 'employer') {
+        const empDocRef = doc(db, COLLECTIONS.EMPLOYERS, user.uid);
+        const empSnap = await getDoc(empDocRef);
+        if (!empSnap.exists()) {
+          const newEmp = createDefaultEmployerProfile(user.uid, companyName || '', userName, user.email || '');
+          await saveEmployerToFirestore(newEmp);
+        }
+        setCurrentEmployerIdState(user.uid);
+      }
+
+      const session: UserSession = {
+        id: user.uid,
+        name: userName,
+        email: user.email || '',
+        role: assignedRole,
+        companyName
+      };
+
+      setUserSession(session);
+      setRoleState(assignedRole);
+      showToast(`${isNewUser ? 'Account created' : 'Welcome back'}, ${userName}! Signed in with Google.`, 'success');
+      return { success: true, role: assignedRole };
+    } catch (err: any) {
+      console.error('Firebase Google Auth Error:', err);
+      let userFriendlyMsg = 'Could not sign in with Google. Please try again.';
+      if (err.code === 'auth/popup-closed-by-user') {
+        userFriendlyMsg = 'Google sign-in was cancelled.';
+      } else if (err.code === 'auth/popup-blocked') {
+        userFriendlyMsg = 'Your browser blocked the Google sign-in popup. Please allow popups and try again.';
+      } else if (err.code === 'auth/network-request-failed') {
+        userFriendlyMsg = 'Network error. Please check your internet connection.';
+      } else if (err.message) {
+        userFriendlyMsg = err.message;
+      }
+      return { success: false, message: userFriendlyMsg };
+    }
+  };
+
+  // Sign out completely
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
+    setUserSession(null);
+    setCurrentUser(null);
+    setCandidate(null);
+    showToast('Signed out successfully. Session terminated.', 'info');
   };
 
   const setCurrentEmployerId = (id: string) => {
@@ -210,9 +525,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const currentEmployer = employers.find(e => e.id === currentEmployerId) || employers[0] || undefined;
+  const currentEmployer = employers.find(e => 
+    (currentEmployerId && e.id === currentEmployerId) ||
+    (currentUser?.uid && (e.id === currentUser.uid || (e as any).userId === currentUser.uid)) ||
+    (currentUser?.email && (e.contactEmail?.toLowerCase() === currentUser.email.toLowerCase() || e.adminEmail?.toLowerCase() === currentUser.email.toLowerCase()))
+  ) || (currentEmployerId ? employers.find(e => e.id === currentEmployerId) : undefined) || employers[0] || undefined;
 
   const updateCandidate = (data: Partial<CandidateProfile>) => {
+    if (!candidate) return;
     const updated = { ...candidate, ...data };
     setCandidate(updated);
     updateCandidateInFirestore(updated);
@@ -230,7 +550,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Register Candidate / Job Seeker Profile -> Persists to Firestore
   const registerCandidate = async (newCand: Omit<CandidateProfile, 'id' | 'avatarInitials' | 'accentColor' | 'verifiedSpecialist'>): Promise<string> => {
-    const id = `cand-${Date.now().toString().slice(-4)}`;
+    const id = currentUser?.uid || `cand-${Date.now().toString().slice(-4)}`;
     const initials = newCand.name
       .trim()
       .split(/\s+/)
@@ -248,18 +568,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       avatarInitials: initials,
       accentColor: randomColor,
       verifiedSpecialist: true,
-      resumeFileName: newCand.resumeFileName || `${newCand.name.replace(/\s+/g, '_')}_PLM_Resume.pdf`,
+      resumeFileName: newCand.resumeFileName?.trim() || undefined,
     };
 
     setCandidate(createdCand);
     await updateCandidateInFirestore(createdCand);
-    showToast(`Welcome, ${createdCand.name}! Your PLM specialist profile is registered & active.`, 'success');
+    showToast(`Welcome, ${createdCand.name}! Your PLM specialist profile is registered & active in Firebase.`, 'success');
     return id;
   };
 
   // 1. Employer Registers Company -> Persists to Firestore
   const registerEmployer = async (newEmp: Omit<EmployerProfile, 'id' | 'verificationStatus' | 'verificationRequestedAt' | 'logoInitials' | 'logoBg'>): Promise<string> => {
-    const id = `emp-${Date.now().toString().slice(-4)}`;
+    const id = currentUser?.uid || `emp-${Date.now().toString().slice(-4)}`;
     const initials = newEmp.companyName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
     const colors = ['bg-slate-900', 'bg-blue-900', 'bg-teal-900', 'bg-indigo-900', 'bg-emerald-900'];
     const randomBg = colors[Math.floor(Math.random() * colors.length)];
@@ -271,7 +591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       verificationRequestedAt: new Date().toISOString(),
       logoInitials: initials || 'PLM',
       logoBg: randomBg,
-      verificationDocName: newEmp.verificationDocName || `${newEmp.companyName.replace(/\s+/g, '_')}_Tax_Proof.pdf`,
+      verificationDocName: newEmp.verificationDocName?.trim() || undefined,
     };
 
     setEmployers(prev => [createdEmp, ...prev]);
@@ -283,58 +603,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 2. Main Admin Approves Company -> Unlocks job posting & updates Firestore
-  const approveEmployer = (employerId: string, notes?: string) => {
-    let approvedEmp: EmployerProfile | undefined;
+  const approveEmployer = async (employerId: string, notes?: string) => {
+    const target = employers.find(emp => emp.id === employerId);
+    if (!target) return;
 
-    setEmployers(prev => prev.map(emp => {
-      if (emp.id === employerId) {
-        approvedEmp = {
-          ...emp,
-          verificationStatus: 'verified',
-          verifiedAt: new Date().toISOString(),
-        };
-        saveEmployerToFirestore(approvedEmp);
-        return approvedEmp;
-      }
-      return emp;
-    }));
+    const approvedEmp: EmployerProfile = {
+      ...target,
+      verificationStatus: 'verified',
+      verifiedAt: new Date().toISOString(),
+    };
 
-    // Unlock any jobs posted by this employer
+    // 1. Immediately update local state so all UI components re-render instantaneously
+    setEmployers(prev => prev.map(emp => emp.id === employerId ? approvedEmp : emp));
+
+    // 2. Unlock all jobs associated with this employer
     setJobs(prev => prev.map(job => {
-      if (job.employerId === employerId) {
-        const updatedJob = {
+      if (job.employerId === employerId || (target.companyName && job.employerName === target.companyName)) {
+        return {
           ...job,
           isEmployerVerified: true,
           status: 'active' as const,
         };
-        saveJobToFirestore(updatedJob);
-        return updatedJob;
       }
       return job;
     }));
 
-    if (approvedEmp) {
-      showToast(`${approvedEmp.companyName} has been verified and synced to Firebase!`, 'success');
+    // 3. Persist to Firestore (which also notifies onSnapshot listeners across all browser sessions)
+    try {
+      await saveEmployerToFirestore(approvedEmp);
+
+      const affectedJobs = jobs.filter(job => job.employerId === employerId || (target.companyName && job.employerName === target.companyName));
+      for (const j of affectedJobs) {
+        await saveJobToFirestore({
+          ...j,
+          isEmployerVerified: true,
+          status: 'active',
+        });
+      }
+    } catch (err) {
+      console.warn('Error persisting employer approval to Firestore:', err);
     }
+
+    showToast(`${approvedEmp.companyName} has been verified and synced across all views!`, 'success');
   };
 
   // 3. Main Admin Rejects / Requests Revision
-  const rejectEmployer = (employerId: string, reason: string) => {
+  const rejectEmployer = async (employerId: string, reason: string) => {
     const emp = employers.find(e => e.id === employerId);
     if (!emp) return;
 
-    setEmployers(prev => prev.map(e => {
-      if (e.id === employerId) {
-        const rejected = {
-          ...e,
-          verificationStatus: 'rejected' as const,
-          rejectionReason: reason,
-        };
-        saveEmployerToFirestore(rejected);
-        return rejected;
-      }
-      return e;
-    }));
+    const rejected: EmployerProfile = {
+      ...emp,
+      verificationStatus: 'rejected',
+      rejectionReason: reason,
+    };
+
+    setEmployers(prev => prev.map(e => e.id === employerId ? rejected : e));
+
+    try {
+      await saveEmployerToFirestore(rejected);
+    } catch (err) {
+      console.warn('Error persisting employer rejection to Firestore:', err);
+    }
 
     showToast(`Verification rejected for ${emp.companyName}. Synced to Firebase.`, 'warning');
   };
@@ -376,54 +706,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 5. Apply to Job
   const applyToJob = (jobId: string, coverNote: string, resumeFileName?: string): { success: boolean; message: string } => {
-    const targetJob = jobs.find(j => j.id === jobId);
-    if (!targetJob) return { success: false, message: 'Job not found' };
+    let effectiveCandidate = candidate;
+    if (!effectiveCandidate && (currentUser || userSession)) {
+      const uid = currentUser?.uid || userSession?.id || `cand-${Date.now()}`;
+      const name = userSession?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'PLM Specialist';
+      const email = currentUser?.email || userSession?.email || '';
+      effectiveCandidate = createDefaultCandidateProfile(uid, name, email);
+      setCandidate(effectiveCandidate);
+      updateCandidateInFirestore(effectiveCandidate).catch(console.warn);
+    }
 
-    const alreadyApplied = applications.some(a => a.jobId === jobId && a.candidateId === candidate.id);
+    if (!effectiveCandidate) {
+      showToast('Please sign in as a job seeker to apply.', 'warning');
+      return { success: false, message: 'No active candidate profile found.' };
+    }
+
+    const targetJob = jobs.find(j => j.id === jobId) || jobs.find(j => j.id && jobId && j.id.toString() === jobId.toString());
+    if (!targetJob) {
+      showToast('Job position could not be found or has expired.', 'warning');
+      return { success: false, message: 'Job not found' };
+    }
+
+    const alreadyApplied = applications.some(a => 
+      a.jobId === targetJob.id && 
+      (a.candidateId === effectiveCandidate.id || (a.candidateEmail && a.candidateEmail === effectiveCandidate.email))
+    );
     if (alreadyApplied) {
+      showToast('You have already submitted an application for this position.', 'info');
       return { success: false, message: 'You have already applied to this position.' };
     }
 
     // Calculate match score
     let score = 70;
-    if (candidate.primaryPLM === targetJob.primaryPLM) score += 15;
-    else if ((targetJob.relatedSystems || []).includes(candidate.primaryPLM) || (candidate.secondaryPLMs || []).includes(targetJob.primaryPLM)) score += 8;
+    if (effectiveCandidate.primaryPLM === targetJob.primaryPLM) score += 15;
+    else if ((targetJob.relatedSystems || []).includes(effectiveCandidate.primaryPLM) || (effectiveCandidate.secondaryPLMs || []).includes(targetJob.primaryPLM)) score += 8;
 
-    const candidateModules = candidate.modules || [];
+    const candidateModules = effectiveCandidate.modules || [];
     const jobModules = targetJob.requiredModules || [];
     const matchingModules = jobModules.filter(m => candidateModules.includes(m));
     score += Math.min(10, matchingModules.length * 3);
 
-    if (targetJob.itarRequired && candidate.clearance && candidate.clearance !== 'None') score += 5;
+    if (targetJob.itarRequired && effectiveCandidate.clearance && effectiveCandidate.clearance !== 'None') score += 5;
 
     const newApp: Application = {
-      id: `app-${Date.now()}`,
-      jobId,
-      jobTitle: targetJob.title,
-      employerId: targetJob.employerId,
-      employerName: targetJob.employerName,
-      candidateId: candidate.id,
-      candidateName: candidate.name || 'Candidate',
-      candidateEmail: candidate.email || 'candidate@plmnexus.internal',
-      candidateHeadline: candidate.headline || 'PLM Specialist',
-      candidatePrimaryPLM: candidate.primaryPLM,
-      candidateExperience: candidate.yearsOfExperience || 0,
+      id: `app-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      jobId: targetJob.id,
+      jobTitle: targetJob.title || 'PLM Specialist',
+      employerId: targetJob.employerId || '',
+      employerName: targetJob.employerName || '',
+      candidateId: effectiveCandidate.id,
+      candidateName: effectiveCandidate.name || 'Candidate',
+      candidateEmail: effectiveCandidate.email || '',
+      candidateHeadline: effectiveCandidate.headline || '',
+      candidatePrimaryPLM: effectiveCandidate.primaryPLM || 'Siemens Teamcenter',
+      candidateExperience: effectiveCandidate.yearsOfExperience || 0,
       matchScore: Math.min(99, score),
       appliedDate: new Date().toISOString(),
-      coverNote,
-      resumeFileName: resumeFileName || 'Candidate_Resume.pdf',
+      coverNote: coverNote.trim() || `Application submitted by ${effectiveCandidate.name}.`,
+      resumeFileName: resumeFileName?.trim() || effectiveCandidate.resumeFileName || `${effectiveCandidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
       status: 'applied',
     };
 
-    setApplications(prev => [newApp, ...prev]);
+    setApplications(prev => [newApp, ...prev.filter(a => a.id !== newApp.id)]);
     saveApplicationToFirestore(newApp);
 
     // Update job applicant count
     const updatedJob = { ...targetJob, applicantCount: (targetJob.applicantCount || 0) + 1 };
-    setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
+    setJobs(prev => prev.map(j => j.id === targetJob.id ? updatedJob : j));
     saveJobToFirestore(updatedJob);
 
-    showToast(`Application saved to Firebase with ${Math.min(99, score)}% match score!`, 'success');
+    showToast(`Application successfully submitted for "${targetJob.title}"!`, 'success');
     return { success: true, message: 'Application submitted successfully!' };
   };
 
@@ -464,6 +816,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setRole,
         candidate,
         updateCandidate,
+        allCandidates,
         employers,
         currentEmployerId,
         setCurrentEmployerId,
@@ -482,7 +835,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notificationToast,
         dismissToast,
         currentUser,
+        userSession,
+        isAuthReady,
+        login,
+        signUp,
+        loginWithGoogle,
+        logout,
         isFirebaseConnected,
+        platformChoices,
       }}
     >
       {children}

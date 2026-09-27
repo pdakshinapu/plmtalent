@@ -1,6 +1,0 @@
-{
-  "name": "PLM Nexus | Dedicated PLM Talent Platform",
-  "description": "The premier hiring platform exclusively for Product Lifecycle Management (PLM) specialists, verified enterprise employers, and admin governance.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

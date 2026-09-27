@@ -20,6 +20,7 @@ import {
 } from "../types";
 
 export const COLLECTIONS = {
+  USERS: "users",
   EMPLOYERS: "employers",
   JOBS: "jobs",
   APPLICATIONS: "applications",
@@ -33,6 +34,7 @@ const DUMMY_IDS = {
   JOBS: ['job-01', 'job-02', 'job-03', 'job-04', 'job-05'],
   APPLICATIONS: ['app-01', 'app-02', 'app-03'],
   EMAILS: ['mail-01', 'mail-02', 'mail-03', 'mail-04'],
+  CANDIDATES: ['cand-01', 'cand-02'],
 };
 
 export async function purgeDummyDataFromFirestore() {
@@ -56,6 +58,10 @@ export async function purgeDummyDataFromFirestore() {
       batch.delete(doc(db, "emails", id));
       hasDeletions = true;
     }
+    for (const id of DUMMY_IDS.CANDIDATES) {
+      batch.delete(doc(db, COLLECTIONS.CANDIDATES, id));
+      hasDeletions = true;
+    }
 
     if (hasDeletions) {
       await batch.commit();
@@ -77,7 +83,7 @@ export function subscribeToEmployers(
       const list: EmployerProfile[] = [];
       snapshot.forEach((d) => {
         if (!DUMMY_IDS.EMPLOYERS.includes(d.id)) {
-          list.push(d.data() as EmployerProfile);
+          list.push({ id: d.id, ...d.data() } as EmployerProfile);
         }
       });
       onData(list);
@@ -102,7 +108,7 @@ export function subscribeToJobs(
       const list: Job[] = [];
       snapshot.forEach((d) => {
         if (!DUMMY_IDS.JOBS.includes(d.id)) {
-          list.push(d.data() as Job);
+          list.push({ id: d.id, ...d.data() } as Job);
         }
       });
       onData(list);
@@ -127,7 +133,7 @@ export function subscribeToApplications(
       const list: Application[] = [];
       snapshot.forEach((d) => {
         if (!DUMMY_IDS.APPLICATIONS.includes(d.id)) {
-          list.push(d.data() as Application);
+          list.push({ id: d.id, ...d.data() } as Application);
         }
       });
       onData(list);
@@ -137,6 +143,31 @@ export function subscribeToApplications(
     });
   } catch (err) {
     console.warn("Failed to subscribe to applications:", err);
+    return () => {};
+  }
+}
+
+// Subscribe to all Candidate Profiles (used by employers to search/browse talent)
+export function subscribeToCandidates(
+  onData: (candidates: CandidateProfile[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const colRef = collection(db, COLLECTIONS.CANDIDATES);
+    return onSnapshot(colRef, (snapshot) => {
+      const list: CandidateProfile[] = [];
+      snapshot.forEach((d) => {
+        if (!DUMMY_IDS.CANDIDATES.includes(d.id)) {
+          list.push({ id: d.id, ...d.data() } as CandidateProfile);
+        }
+      });
+      onData(list);
+    }, (error) => {
+      console.warn("Firestore candidates listener error:", error);
+      onError?.(error);
+    });
+  } catch (err) {
+    console.warn("Failed to subscribe to candidates:", err);
     return () => {};
   }
 }
@@ -151,7 +182,7 @@ export function subscribeToCandidate(
     const docRef = doc(db, COLLECTIONS.CANDIDATES, candidateId);
     return onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
-        onData(snapshot.data() as CandidateProfile);
+        onData({ id: snapshot.id, ...snapshot.data() } as CandidateProfile);
       }
     }, (error) => {
       console.warn("Firestore candidate listener error:", error);

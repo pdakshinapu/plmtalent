@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { EmployerProfile } from '../types';
+import { AdminSettings } from './AdminSettings';
 import { 
   ShieldCheck, 
   Clock, 
@@ -18,7 +19,8 @@ import {
   Layers,
   Sparkles,
   Search,
-  Filter
+  Filter,
+  Settings
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -39,13 +41,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
     jobs, 
     applications, 
     candidate,
-    setRole,
     setCurrentEmployerId
   } = useApp();
 
-  const [selectedAuditEmp, setSelectedAuditEmp] = useState<EmployerProfile | null>(
-    employers.find(e => e.verificationStatus === 'pending_verification') || employers[0] || null
-  );
+  const [selectedAuditEmpId, setSelectedAuditEmpId] = useState<string | null>(null);
+  const [viewingEmpRecord, setViewingEmpRecord] = useState<EmployerProfile | null>(null);
 
   const [auditNotes, setAuditNotes] = useState(
     'Corporate domain DNS verified. Valid federal employer identification (EIN) confirmed on state business registry. Approved for enterprise PLM recruiting.'
@@ -55,16 +55,26 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [empToReject, setEmpToReject] = useState<EmployerProfile | null>(null);
 
-  const pendingEmployers = employers.filter(
+  const pendingEmployers = useMemo(() => employers.filter(
     e => e.verificationStatus === 'pending_verification' || e.verificationStatus === 'under_review'
-  );
-  const verifiedEmployers = employers.filter(e => e.verificationStatus === 'verified');
+  ), [employers]);
+
+  const verifiedEmployers = useMemo(() => employers.filter(
+    e => e.verificationStatus === 'verified'
+  ), [employers]);
+
+  // Derive the active audit employer: strictly one of the pending employers, NEVER an already verified one
+  const activeAuditEmp = useMemo(() => {
+    if (selectedAuditEmpId) {
+      const found = pendingEmployers.find(e => e.id === selectedAuditEmpId);
+      if (found) return found;
+    }
+    return pendingEmployers.length > 0 ? pendingEmployers[0] : null;
+  }, [pendingEmployers, selectedAuditEmpId]);
 
   const handleApprove = (emp: EmployerProfile) => {
     approveEmployer(emp.id, auditNotes);
-    // Refresh selection
-    const nextPending = employers.find(e => e.id !== emp.id && e.verificationStatus === 'pending_verification');
-    setSelectedAuditEmp(nextPending || null);
+    setSelectedAuditEmpId(null);
   };
 
   const handleOpenReject = (emp: EmployerProfile) => {
@@ -77,6 +87,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     e.preventDefault();
     if (!empToReject) return;
     rejectEmployer(empToReject.id, rejectReason);
+    setSelectedAuditEmpId(null);
     setIsRejectModalOpen(false);
     setEmpToReject(null);
   };
@@ -96,9 +107,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
           </div>
           <button
             onClick={onOpenRegisterModal}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors shadow-sm cursor-pointer"
           >
-            + Register Test Employer
+            + Register Enterprise
           </button>
         </div>
 
@@ -174,22 +185,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       {isPending ? (
                         <button
                           onClick={() => {
-                            setSelectedAuditEmp(emp);
+                            setSelectedAuditEmpId(emp.id);
                             setActiveTab('verification-queue');
                           }}
-                          className="px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                          className="px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
                         >
                           Audit & Approve →
                         </button>
                       ) : (
                         <button
-                          onClick={() => {
-                            setCurrentEmployerId(emp.id);
-                            setRole('employer');
-                          }}
-                          className="px-2.5 py-1 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
+                          onClick={() => setViewingEmpRecord(emp)}
+                          className="px-2.5 py-1 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg font-medium transition-colors cursor-pointer"
                         >
-                          View as Employer →
+                          Active & Verified • View Record
                         </button>
                       )}
                     </td>
@@ -259,22 +267,34 @@ export const AdminView: React.FC<AdminViewProps> = ({
               Market Demand by PLM Platform
             </h2>
             <div className="space-y-3">
-              {[
-                { name: 'Siemens Teamcenter', percent: 48, count: '14 Enterprise seats', color: 'bg-blue-600' },
-                { name: 'PTC Windchill', percent: 28, count: '8 Enterprise seats', color: 'bg-emerald-600' },
-                { name: 'Dassault 3DEXPERIENCE / ENOVIA', percent: 16, count: '5 Enterprise seats', color: 'bg-slate-700' },
-                { name: 'Aras Innovator & Open PLM', percent: 8, count: '3 Enterprise seats', color: 'bg-amber-600' },
-              ].map(item => (
-                <div key={item.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800">{item.name}</span>
-                    <span className="font-mono text-slate-500">{item.percent}% ({item.count})</span>
+              {(() => {
+                const totalActive = jobs.filter(j => j.status === 'active').length;
+                const tcJobs = jobs.filter(j => j.status === 'active' && (j.primaryPLM?.includes('Teamcenter') || j.relatedSystems?.some(s => s.includes('Teamcenter')))).length;
+                const windchillJobs = jobs.filter(j => j.status === 'active' && (j.primaryPLM?.includes('Windchill') || j.relatedSystems?.some(s => s.includes('Windchill')))).length;
+                const d3dJobs = jobs.filter(j => j.status === 'active' && (j.primaryPLM?.includes('3DEXPERIENCE') || j.primaryPLM?.includes('ENOVIA') || j.relatedSystems?.some(s => s.includes('3DEXPERIENCE')))).length;
+                const arasJobs = jobs.filter(j => j.status === 'active' && (j.primaryPLM?.includes('Aras') || j.relatedSystems?.some(s => s.includes('Aras')))).length;
+
+                const platformItems = [
+                  { name: 'Siemens Teamcenter', count: tcJobs, percent: totalActive > 0 ? Math.round((tcJobs / totalActive) * 100) : 0, color: 'bg-blue-600' },
+                  { name: 'PTC Windchill', count: windchillJobs, percent: totalActive > 0 ? Math.round((windchillJobs / totalActive) * 100) : 0, color: 'bg-emerald-600' },
+                  { name: 'Dassault 3DEXPERIENCE / ENOVIA', count: d3dJobs, percent: totalActive > 0 ? Math.round((d3dJobs / totalActive) * 100) : 0, color: 'bg-slate-700' },
+                  { name: 'Aras Innovator & Other PLM', count: arasJobs, percent: totalActive > 0 ? Math.round((arasJobs / totalActive) * 100) : 0, color: 'bg-amber-600' },
+                ];
+
+                return platformItems.map(item => (
+                  <div key={item.name} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-800">{item.name}</span>
+                      <span className="font-mono text-slate-500">
+                        {item.percent}% ({item.count} position{item.count !== 1 ? 's' : ''})
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.percent}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.percent}%` }} />
-                  </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
 
@@ -283,23 +303,58 @@ export const AdminView: React.FC<AdminViewProps> = ({
               Compliance & Export Control Breakdown
             </h2>
             <div className="space-y-3">
-              {[
-                { name: 'ITAR Defense / DSS Clearance', count: '62% of Open Roles', desc: 'Defense aerospace & propulsion' },
-                { name: 'FDA 21 CFR Part 11 / ISO 13485', count: '24% of Open Roles', desc: 'Medical device & surgical robotics' },
-                { name: 'Automotive / ASPICE & ISO 26262', count: '14% of Open Roles', desc: 'EV battery & powertrain architecture' },
-              ].map(item => (
-                <div key={item.name} className="p-3 rounded-lg border border-slate-100 bg-slate-50 space-y-0.5">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-900">
-                    <span>{item.name}</span>
-                    <span className="font-mono text-blue-700">{item.count}</span>
+              {(() => {
+                const totalActive = jobs.filter(j => j.status === 'active').length;
+                const itarCount = jobs.filter(j => j.status === 'active' && j.itarRequired).length;
+                const standardCount = Math.max(0, totalActive - itarCount);
+
+                const complianceItems = [
+                  { 
+                    name: 'ITAR Defense / DSS Export Controlled', 
+                    count: `${totalActive > 0 ? Math.round((itarCount / totalActive) * 100) : 0}% of Open Roles`, 
+                    desc: `${itarCount} position${itarCount !== 1 ? 's' : ''} requiring defense or export clearance` 
+                  },
+                  { 
+                    name: 'Commercial & Enterprise Industrial', 
+                    count: `${totalActive > 0 ? Math.round((standardCount / totalActive) * 100) : 0}% of Open Roles`, 
+                    desc: `${standardCount} position${standardCount !== 1 ? 's' : ''} with standard commercial clearance` 
+                  },
+                ];
+
+                return complianceItems.map(item => (
+                  <div key={item.name} className="p-3 rounded-lg border border-slate-100 bg-slate-50 space-y-0.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-900">
+                      <span>{item.name}</span>
+                      <span className="font-mono text-blue-700">{item.count}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">{item.desc}</p>
                   </div>
-                  <p className="text-[11px] text-slate-500">{item.desc}</p>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         </div>
 
+      </div>
+    );
+  }
+
+  // Sub-view: Platform Settings (Admin can manage dynamic PLM options)
+  if (activeTab === 'platform-settings') {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+            <Settings className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Platform Settings</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Manage dynamic dropdown options used across all forms.
+            </p>
+          </div>
+        </div>
+        <AdminSettings />
       </div>
     );
   }
@@ -326,9 +381,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
         <button
           onClick={onOpenRegisterModal}
-          className="px-3.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+          className="px-3.5 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
-          + Register Another Company (Test Flow)
+          + Register Organization
         </button>
       </div>
 
@@ -354,20 +409,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </p>
                 <button
                   onClick={onOpenRegisterModal}
-                  className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                 >
-                  Register a test company →
+                  Register an organization →
                 </button>
               </div>
             ) : (
               pendingEmployers.map(emp => {
-                const isSelected = selectedAuditEmp?.id === emp.id;
+                const isSelected = activeAuditEmp?.id === emp.id;
 
                 return (
                   <button
                     key={emp.id}
-                    onClick={() => setSelectedAuditEmp(emp)}
-                    className={`w-full p-4 text-left transition-colors flex items-start gap-3 ${
+                    onClick={() => setSelectedAuditEmpId(emp.id)}
+                    className={`w-full p-4 text-left transition-colors flex items-start gap-3 cursor-pointer ${
                       isSelected
                         ? 'bg-amber-50/70 border-l-3 border-l-amber-600'
                         : 'hover:bg-slate-50'
@@ -404,26 +459,36 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
         {/* Right Pane (8 cols): Deep Audit & Approval Station */}
         <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {selectedAuditEmp ? (
+          {activeAuditEmp ? (
             <div className="p-6 space-y-6">
               
               {/* Employer Header Lockup */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
                 <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-2xl text-white font-bold text-lg flex items-center justify-center shadow-sm ${selectedAuditEmp.logoBg}`}>
-                    {selectedAuditEmp.logoInitials}
+                  <div className={`w-14 h-14 rounded-2xl text-white font-bold text-lg flex items-center justify-center shadow-sm ${activeAuditEmp.logoBg}`}>
+                    {activeAuditEmp.logoInitials}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold text-slate-900">
-                        {selectedAuditEmp.companyName}
+                        {activeAuditEmp.companyName}
                       </h2>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                        Awaiting Verification
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                        activeAuditEmp.verificationStatus === 'verified'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : activeAuditEmp.verificationStatus === 'under_review'
+                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                          : 'bg-amber-50 text-amber-800 border border-amber-200'
+                      }`}>
+                        {activeAuditEmp.verificationStatus === 'verified'
+                          ? 'Verified'
+                          : activeAuditEmp.verificationStatus === 'under_review'
+                          ? 'Under Review'
+                          : 'Awaiting Verification'}
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 font-mono mt-0.5">
-                      Legal Entity: {selectedAuditEmp.legalEntity}
+                      Legal Entity: {activeAuditEmp.legalEntity}
                     </div>
                   </div>
                 </div>
@@ -431,7 +496,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="text-right sm:shrink-0">
                   <span className="text-xs text-slate-400 block">Registration Request</span>
                   <span className="text-xs font-mono font-semibold text-slate-700">
-                    {new Date(selectedAuditEmp.verificationRequestedAt).toLocaleString([], {
+                    {new Date(activeAuditEmp.verificationRequestedAt || Date.now()).toLocaleString([], {
                       month: 'short',
                       day: 'numeric',
                       hour: '2-digit',
@@ -461,7 +526,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-mono text-slate-700 text-[11px]">
-                      {selectedAuditEmp.corporateDomain}
+                      {activeAuditEmp.corporateDomain}
                     </div>
                     <p className="text-[11px] text-slate-500">
                       Representative email domain matches official corporate website.
@@ -480,7 +545,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-mono text-slate-700 text-[11px]">
-                      {selectedAuditEmp.taxRegistrationNumber}
+                      {activeAuditEmp.taxRegistrationNumber}
                     </div>
                     <p className="text-[11px] text-slate-500">
                       Registered in good standing with corporate business authorities.
@@ -499,10 +564,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-semibold text-slate-800 text-[11px]">
-                      {selectedAuditEmp.primaryPLMStack.join(', ')}
+                      {activeAuditEmp.primaryPLMStack.join(', ')}
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      CAD Tools: {selectedAuditEmp.cadEnvironments.join(', ')}
+                      CAD Tools: {activeAuditEmp.cadEnvironments.join(', ')}
                     </p>
                   </div>
 
@@ -518,10 +583,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-medium text-slate-800 text-[11px]">
-                      {selectedAuditEmp.contactPerson} ({selectedAuditEmp.contactTitle})
+                      {activeAuditEmp.contactPerson} ({activeAuditEmp.contactTitle})
                     </div>
                     <p className="text-[11px] font-mono text-slate-500">
-                      {selectedAuditEmp.contactEmail}
+                      {activeAuditEmp.contactEmail}
                     </p>
                   </div>
 
@@ -536,7 +601,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                   <div>
                     <div className="font-semibold text-slate-900">
-                      {selectedAuditEmp.verificationDocName}
+                      {activeAuditEmp.verificationDocName || 'Corporate_Registry_Certificate.pdf'}
                     </div>
                     <div className="text-[11px] text-slate-500">
                       CMMC / ITAR / Certificate of Incorporation Document Attachment
@@ -572,7 +637,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <p className="text-[11px] text-blue-800 leading-relaxed">
                   Clicking <strong>Approve & Unlock Enterprise</strong> will:
                   <br />
-                  1. Grant verified status to {selectedAuditEmp.companyName}.
+                  1. Grant verified status to {activeAuditEmp.companyName}.
                   <br />
                   2. Activate verified credentials and unlock live job publishing across the network.
                   <br />
@@ -583,26 +648,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
               {/* Primary Governance Actions */}
               <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <button
-                  onClick={() => handleOpenReject(selectedAuditEmp)}
-                  className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors"
+                  onClick={() => handleOpenReject(activeAuditEmp)}
+                  className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors cursor-pointer"
                 >
                   Reject / Request Revised Proof
                 </button>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
-                    onClick={() => {
-                      setCurrentEmployerId(selectedAuditEmp.id);
-                      setRole('employer');
-                    }}
-                    className="w-full sm:w-auto px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 border border-slate-200 rounded-xl transition-colors"
-                  >
-                    Preview Company View
-                  </button>
-
-                  <button
-                    onClick={() => handleApprove(selectedAuditEmp)}
-                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+                    onClick={() => handleApprove(activeAuditEmp)}
+                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
                     <span>Approve & Unlock Enterprise</span>
@@ -612,10 +667,43 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
             </div>
           ) : (
-            <div className="p-16 text-center text-slate-400 space-y-2">
-              <Building2 className="w-10 h-10 mx-auto text-slate-300" />
-              <div className="text-sm font-semibold text-slate-700">Select an enterprise to audit</div>
-              <p className="text-xs">Choose a company from the queue on the left to begin verification.</p>
+            <div className="p-12 text-center space-y-5">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-sm">
+                <CheckCircle2 className="w-9 h-9" />
+              </div>
+              <div className="max-w-md mx-auto space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Queue Cleared • 0 Pending Approval</span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  All Organization Verifications Complete
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  All registered enterprises have been audited and verified. No organizations are currently awaiting compliance review. As new employers register, their records will automatically appear in this queue.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setActiveTab('employers-list')}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  View Enterprise Directory ({employers.length}) →
+                </button>
+                <button
+                  onClick={() => setActiveTab('ecosystem-stats')}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  PLM Market Analytics
+                </button>
+                <button
+                  onClick={onOpenRegisterModal}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  + Register Organization
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -672,6 +760,93 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VERIFIED ENTERPRISE RECORD INSPECTION MODAL */}
+      {viewingEmpRecord && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl text-white font-bold text-sm flex items-center justify-center shadow-xs ${viewingEmpRecord.logoBg}`}>
+                  {viewingEmpRecord.logoInitials}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {viewingEmpRecord.companyName}
+                  </h3>
+                  <div className="text-xs text-slate-500 font-mono">
+                    {viewingEmpRecord.legalEntity}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingEmpRecord(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Verified & Active Enterprise
+              </span>
+              {viewingEmpRecord.verifiedAt && (
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Verified: {new Date(viewingEmpRecord.verifiedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Corporate Domain</span>
+                <div className="font-mono text-slate-800 font-medium">{viewingEmpRecord.corporateDomain || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Tax EIN / Registration</span>
+                <div className="font-mono text-slate-800 font-medium">{viewingEmpRecord.taxRegistrationNumber || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">PLM Environment</span>
+                <div className="font-medium text-slate-800">{viewingEmpRecord.primaryPLMStack?.join(', ') || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">CAD Tools</span>
+                <div className="font-medium text-slate-800">{viewingEmpRecord.cadEnvironments?.join(', ') || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5 sm:col-span-2">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Authorized Representative</span>
+                <div className="font-medium text-slate-800">{viewingEmpRecord.contactPerson} ({viewingEmpRecord.contactTitle || 'Hiring Lead'})</div>
+                <div className="text-[11px] font-mono text-slate-500">{viewingEmpRecord.contactEmail}</div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-slate-800 truncate max-w-[280px]">
+                  {viewingEmpRecord.verificationDocName || 'Corporate_Registry_Certificate.pdf'}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                Verified Document
+              </span>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingEmpRecord(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+              >
+                Close Record
+              </button>
+            </div>
           </div>
         </div>
       )}

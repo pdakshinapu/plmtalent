@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { PLMSystem, PLMModule, CADTool, ClearanceLevel } from '../types';
 import { 
@@ -14,7 +14,8 @@ import {
   Sparkles,
   Briefcase,
   Layers,
-  Award
+  Award,
+  Plus
 } from 'lucide-react';
 
 interface RegisterCandidateModalProps {
@@ -23,39 +24,6 @@ interface RegisterCandidateModalProps {
   onSuccess?: () => void;
 }
 
-const AVAILABLE_PLM_SYSTEMS: PLMSystem[] = [
-  'Siemens Teamcenter',
-  'PTC Windchill',
-  'Dassault 3DEXPERIENCE / ENOVIA',
-  'Aras Innovator',
-  'SAP PLM',
-  'Autodesk Fusion / Upchain',
-  'Arena PLM',
-  'Agile PLM'
-];
-
-const AVAILABLE_MODULES: PLMModule[] = [
-  'BOM & Part Architecture',
-  'Active Workspace (AWC)',
-  'CAD / MCAD Integration',
-  'ECAD Integration',
-  'Engineering Change (ECN/ECO)',
-  'Requirements & MBSE',
-  'Manufacturing Process (MPP)',
-  'Quality & CAPA',
-  'Supplier Collaboration',
-  'Data Migration & ETL'
-];
-
-const AVAILABLE_CAD_TOOLS: CADTool[] = [
-  'Siemens NX',
-  'CATIA V5/V6',
-  'PTC Creo',
-  'SolidWorks',
-  'Autodesk Inventor',
-  'Altium Designer'
-];
-
 const CLEARANCE_OPTIONS: ClearanceLevel[] = [
   'None',
   'ITAR / Export Controlled',
@@ -63,12 +31,81 @@ const CLEARANCE_OPTIONS: ClearanceLevel[] = [
   'Top Secret'
 ];
 
+// Inline add-custom-option button for chip grids
+const InlineAdd: React.FC<{
+  onAdd: (value: string) => void;
+  placeholder?: string;
+}> = ({ onAdd, placeholder = 'Add custom...' }) => {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const commit = () => {
+    const trimmed = value.trim();
+    if (trimmed) onAdd(trimmed);
+    setValue('');
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="px-2.5 py-1.5 text-xs rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-1 cursor-pointer"
+        title="Add custom option"
+      >
+        <Plus className="w-3 h-3" /> Add
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { setOpen(false); setValue(''); }
+        }}
+        placeholder={placeholder}
+        className="px-2 py-1 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none w-36"
+      />
+      <button type="button" onClick={commit}
+        className="px-2 py-1 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer">
+        ✓
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setValue(''); }}
+        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+        <X className="w-3 h-3" />
+      </button>
+    </span>
+  );
+};
+
 export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({ 
   isOpen, 
   onClose,
   onSuccess
 }) => {
-  const { registerCandidate, setRole } = useApp();
+  const { registerCandidate, setRole, platformChoices } = useApp();
+
+  // Local copies of choices so user can add custom options per-session
+  const [localSystems, setLocalSystems] = useState<string[]>([]);
+  const [localModules, setLocalModules] = useState<string[]>([]);
+  const [localCAD, setLocalCAD] = useState<string[]>([]);
+
+  useEffect(() => {
+    setLocalSystems(platformChoices.plmSystems);
+    setLocalModules(platformChoices.plmModules);
+    setLocalCAD(platformChoices.cadTools);
+  }, [platformChoices, isOpen]);
 
   // Form state
   const [name, setName] = useState('');
@@ -76,29 +113,25 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
-  const [yearsOfExperience, setYearsOfExperience] = useState<number>(7);
+  const [yearsOfExperience, setYearsOfExperience] = useState<number>(0);
   const [primaryPLM, setPrimaryPLM] = useState<PLMSystem>('Siemens Teamcenter');
-  const [secondaryPLMs, setSecondaryPLMs] = useState<PLMSystem[]>(['PTC Windchill']);
-  const [modules, setModules] = useState<PLMModule[]>([
-    'BOM & Part Architecture',
-    'Active Workspace (AWC)',
-    'CAD / MCAD Integration'
-  ]);
-  const [cadTools, setCadTools] = useState<CADTool[]>(['Siemens NX']);
-  const [clearance, setClearance] = useState<ClearanceLevel>('ITAR / Export Controlled');
+  const [secondaryPLMs, setSecondaryPLMs] = useState<PLMSystem[]>([]);
+  const [modules, setModules] = useState<PLMModule[]>([]);
+  const [cadTools, setCadTools] = useState<CADTool[]>([]);
+  const [clearance, setClearance] = useState<ClearanceLevel>('None');
   const [currentCompany, setCurrentCompany] = useState('');
   const [currentRole, setCurrentRole] = useState('');
-  const [expectedCompensation, setExpectedCompensation] = useState('$150,000 - $170,000 / year');
-  const [availableFrom, setAvailableFrom] = useState('2 Weeks Notice');
+  const [expectedCompensation, setExpectedCompensation] = useState('');
+  const [availableFrom, setAvailableFrom] = useState('');
   const [bio, setBio] = useState('');
-  const [certificationsText, setCertificationsText] = useState('Siemens Teamcenter Certified Professional, AWC 6.x Specialist');
-  const [resumeFileName, setResumeFileName] = useState('Candidate_PLM_Specialist_Resume.pdf');
+  const [certificationsText, setCertificationsText] = useState('');
+  const [resumeFileName, setResumeFileName] = useState('');
   
   // Highlight Project
-  const [projectTitle, setProjectTitle] = useState('Enterprise Active Workspace 6.2 Migration');
-  const [projectSystem, setProjectSystem] = useState('Siemens Teamcenter 14.x / AWC');
-  const [projectDesc, setProjectDesc] = useState('Architected global multi-site BMIDE data model consolidation and modernized rich client users to Active Workspace.');
-  const [projectImpact, setProjectImpact] = useState('Accelerated CAD check-in throughput by 42% across 3 global design engineering sites.');
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectSystem, setProjectSystem] = useState('');
+  const [projectDesc, setProjectDesc] = useState('');
+  const [projectImpact, setProjectImpact] = useState('');
 
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [registeredId, setRegisteredId] = useState('');
@@ -124,37 +157,6 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
     );
   };
 
-  const handleFillDemo = () => {
-    setName('Elena Rostova');
-    setHeadline('Senior Siemens Teamcenter Solution Architect | AWC 6.3 & BMIDE Specialist');
-    setEmail('elena.rostova@plm-engineers.net');
-    setPhone('+1 (313) 555-0182');
-    setLocation('Detroit, MI (Open to Hybrid / Remote)');
-    setYearsOfExperience(9);
-    setPrimaryPLM('Siemens Teamcenter');
-    setSecondaryPLMs(['PTC Windchill', 'Dassault 3DEXPERIENCE / ENOVIA']);
-    setModules([
-      'BOM & Part Architecture',
-      'Active Workspace (AWC)',
-      'CAD / MCAD Integration',
-      'Engineering Change (ECN/ECO)',
-      'Data Migration & ETL'
-    ]);
-    setCadTools(['Siemens NX', 'PTC Creo', 'CATIA V5/V6']);
-    setClearance('ITAR / Export Controlled');
-    setCurrentCompany('General Dynamics Land Systems');
-    setCurrentRole('Lead PLM Architect');
-    setExpectedCompensation('$165,000 - $185,000 / year (or $95/hr C2C)');
-    setAvailableFrom('Available in 2 Weeks');
-    setBio('Senior PLM Systems Architect with 9+ years deploying Siemens Teamcenter enterprise solutions across defense, aerospace, and heavy vehicle sectors. Specialized in Active Workspace custom tile configuration, BMIDE business object modeling, and NX CAD manager pipelines.');
-    setCertificationsText('Siemens Certified Teamcenter Solution Architect, ITAR Compliance Verification, AWC 6.3 Certified');
-    setResumeFileName('Elena_Rostova_Senior_PLM_Architect_Resume.pdf');
-    setProjectTitle('Global Teamcenter 14 & Active Workspace 6.3 Multi-Site Rollout');
-    setProjectSystem('Siemens Teamcenter 14.2 & Active Workspace');
-    setProjectDesc('Led the architecture team migrating 1,200 concurrent CAD engineers from RAC (Rich Client) to Active Workspace 6.3 with high-availability microservices clustering.');
-    setProjectImpact('Reduced engineering ECO cycle duration by 35% and achieved 99.9% uptime across US defense programs.');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !headline) return;
@@ -168,32 +170,32 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
         .filter(Boolean);
 
       const id = await registerCandidate({
-        name,
-        headline,
-        email,
-        phone: phone || '+1 (555) 000-0000',
-        location: location || 'Remote / United States',
-        yearsOfExperience: Number(yearsOfExperience) || 5,
+        name: name.trim(),
+        headline: headline.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        location: location.trim(),
+        yearsOfExperience: Number(yearsOfExperience) || 0,
         primaryPLM,
         secondaryPLMs,
         modules,
         cadTools,
         clearance,
-        certifications: certs.length > 0 ? certs : ['PLM Nexus Verified Specialist'],
-        currentCompany: currentCompany || 'Confidential Enterprise',
-        currentRole: currentRole || headline,
-        expectedCompensation: expectedCompensation || '$150,000 / year',
-        availableFrom: availableFrom || 'Immediate',
-        bio: bio || `Specialist in ${primaryPLM} with ${yearsOfExperience} years of production deployment experience.`,
-        resumeFileName,
-        portfolioProjects: [
+        certifications: certs,
+        currentCompany: currentCompany.trim(),
+        currentRole: currentRole.trim() || headline.trim(),
+        expectedCompensation: expectedCompensation.trim(),
+        availableFrom: availableFrom.trim(),
+        bio: bio.trim(),
+        resumeFileName: resumeFileName.trim() || `${name.trim().replace(/\s+/g, '_')}_Resume.pdf`,
+        portfolioProjects: projectTitle.trim() ? [
           {
-            title: projectTitle || 'Enterprise PLM Deployment',
-            system: projectSystem || primaryPLM,
-            description: projectDesc || 'Configured enterprise data models, workflows, and integrations.',
-            impact: projectImpact || 'Improved cross-functional engineering productivity.'
+            title: projectTitle.trim(),
+            system: projectSystem.trim() || primaryPLM,
+            description: projectDesc.trim(),
+            impact: projectImpact.trim()
           }
-        ]
+        ] : []
       });
 
       setRegisteredId(id);
@@ -289,20 +291,6 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-            
-            {/* Quick Demo Pre-fill */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/70 border border-blue-100">
-              <div className="text-xs text-blue-900">
-                <strong>Quick Test?</strong> Pre-populate authentic PLM Solution Architect credentials in 1 click.
-              </div>
-              <button
-                type="button"
-                onClick={handleFillDemo}
-                className="px-3 py-1 text-xs font-semibold text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-2xs"
-              >
-                Auto-Fill Candidate
-              </button>
-            </div>
 
             {/* 1. Identity & Contact */}
             <div className="space-y-4">
@@ -425,15 +413,15 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Primary PLM Platform * (Your core focus)
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {AVAILABLE_PLM_SYSTEMS.map(sys => {
-                    const isSelected = primaryPLM === sys;
+                <div className="flex flex-wrap gap-2">
+                  {localSystems.map(sys => {
+                    const isSelected = primaryPLM === sys as PLMSystem;
                     return (
                       <button
                         key={sys}
                         type="button"
-                        onClick={() => setPrimaryPLM(sys)}
-                        className={`p-2.5 rounded-lg border text-left text-xs transition-colors flex items-center justify-between ${
+                        onClick={() => setPrimaryPLM(sys as PLMSystem)}
+                        className={`px-3 py-1.5 rounded-lg border text-left text-xs transition-colors flex items-center gap-1.5 ${
                           isSelected 
                             ? 'bg-slate-900 text-white border-slate-900 font-semibold shadow-xs' 
                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
@@ -444,6 +432,13 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                       </button>
                     );
                   })}
+                  <InlineAdd
+                    placeholder="Custom PLM..."
+                    onAdd={val => {
+                      if (!localSystems.includes(val)) setLocalSystems(prev => [...prev, val]);
+                      setPrimaryPLM(val as PLMSystem);
+                    }}
+                  />
                 </div>
               </div>
 
@@ -452,13 +447,13 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                   Secondary PLM Systems
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_PLM_SYSTEMS.filter(s => s !== primaryPLM).map(sys => {
-                    const isSelected = secondaryPLMs.includes(sys);
+                  {localSystems.filter(s => s !== primaryPLM).map(sys => {
+                    const isSelected = secondaryPLMs.includes(sys as PLMSystem);
                     return (
                       <button
                         key={sys}
                         type="button"
-                        onClick={() => toggleSecondaryPLM(sys)}
+                        onClick={() => toggleSecondaryPLM(sys as PLMSystem)}
                         className={`px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 ${
                           isSelected 
                             ? 'bg-blue-50 text-blue-700 border border-blue-200 font-medium' 
@@ -470,6 +465,13 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                       </button>
                     );
                   })}
+                  <InlineAdd
+                    placeholder="Custom PLM..."
+                    onAdd={val => {
+                      if (!localSystems.includes(val)) setLocalSystems(prev => [...prev, val]);
+                      if (!secondaryPLMs.includes(val as PLMSystem)) toggleSecondaryPLM(val as PLMSystem);
+                    }}
+                  />
                 </div>
               </div>
 
@@ -477,15 +479,15 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Domain Modules & Functional Architecture (Select relevant)
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {AVAILABLE_MODULES.map(mod => {
-                    const isSelected = modules.includes(mod);
+                <div className="flex flex-wrap gap-1.5">
+                  {localModules.map(mod => {
+                    const isSelected = modules.includes(mod as PLMModule);
                     return (
                       <button
                         key={mod}
                         type="button"
-                        onClick={() => toggleModule(mod)}
-                        className={`p-2 rounded-lg text-left text-xs transition-colors flex items-center justify-between border ${
+                        onClick={() => toggleModule(mod as PLMModule)}
+                        className={`px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors flex items-center gap-1.5 border ${
                           isSelected 
                             ? 'bg-slate-900 text-white border-slate-900 font-medium' 
                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
@@ -496,6 +498,13 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                       </button>
                     );
                   })}
+                  <InlineAdd
+                    placeholder="Custom module..."
+                    onAdd={val => {
+                      if (!localModules.includes(val)) setLocalModules(prev => [...prev, val]);
+                      if (!modules.includes(val as PLMModule)) toggleModule(val as PLMModule);
+                    }}
+                  />
                 </div>
               </div>
 
@@ -503,15 +512,15 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Integrated CAD Tools & Authoring Software
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {AVAILABLE_CAD_TOOLS.map(tool => {
-                    const isSelected = cadTools.includes(tool);
+                <div className="flex flex-wrap gap-2">
+                  {localCAD.map(tool => {
+                    const isSelected = cadTools.includes(tool as CADTool);
                     return (
                       <button
                         key={tool}
                         type="button"
-                        onClick={() => toggleCAD(tool)}
-                        className={`p-2 rounded-lg border text-left text-xs transition-colors flex items-center justify-between ${
+                        onClick={() => toggleCAD(tool as CADTool)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-colors flex items-center gap-1.5 ${
                           isSelected 
                             ? 'bg-slate-800 text-white border-slate-800 font-medium' 
                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
@@ -522,6 +531,13 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                       </button>
                     );
                   })}
+                  <InlineAdd
+                    placeholder="Custom CAD..."
+                    onAdd={val => {
+                      if (!localCAD.includes(val)) setLocalCAD(prev => [...prev, val]);
+                      if (!cadTools.includes(val as CADTool)) toggleCAD(val as CADTool);
+                    }}
+                  />
                 </div>
               </div>
             </div>

@@ -21,8 +21,11 @@ import {
   FileText,
   UserCheck,
   ArrowUpRight,
-  X
+  X,
+  Edit3,
+  Zap
 } from 'lucide-react';
+import { EditCandidateModal } from './EditCandidateModal';
 
 interface CandidateViewProps {
   activeTab: string;
@@ -79,6 +82,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
   const [isApplying, setIsApplying] = useState(false);
   const [coverNote, setCoverNote] = useState('');
   const [resumeFileName, setResumeFileName] = useState('Candidate_PLM_Resume.pdf');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Filtered jobs calculation
   const filteredJobs = useMemo(() => {
@@ -139,16 +143,24 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
     setSelectedJob(job);
     const reqMods = job.requiredModules || [];
     setCoverNote(
-      `Hello ${job.employerName} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate?.yearsOfExperience || 5} years dedicated to ${candidate?.primaryPLM || 'PLM'}, I have extensive experience in ${reqMods.slice(0, 2).join(' and ') || 'system architecture'}.\n\nMy profile and certifications are verified on PLM Nexus.`
+      `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate?.yearsOfExperience || 3} years dedicated to ${candidate?.primaryPLM || job.primaryPLM || 'PLM'}, I have extensive experience in ${reqMods.slice(0, 2).join(' and ') || 'system architecture'}.\n\nMy profile and certifications are verified on PLM Nexus.`
     );
     setIsApplying(true);
+  };
+
+  const handleDirectApply = (job: Job) => {
+    const defaultCoverNote = `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role via verified 1-click application. My PLM credentials and experience are verified on PLM Nexus.`;
+    return applyToJob(job.id, defaultCoverNote, resumeFileName);
   };
 
   const handleConfirmApply = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedJob) return;
-    applyToJob(selectedJob.id, coverNote, resumeFileName);
+    const res = applyToJob(selectedJob.id, coverNote, resumeFileName);
     setIsApplying(false);
+    if (res.success) {
+      setSelectedJob(null);
+    }
   };
 
   // Render Sub-Views based on activeTab
@@ -293,15 +305,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               Verified PLM Specialist
             </span>
-            {onOpenRegisterCandidateModal && (
-              <button
-                onClick={onOpenRegisterCandidateModal}
-                className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-2xs"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>+ Register New Profile</span>
-              </button>
-            )}
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Profile</span>
+            </button>
           </div>
         </div>
 
@@ -310,17 +320,27 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl bg-slate-900 text-white font-bold text-xl flex items-center justify-center shadow-sm">
-                {candidate.avatarInitials}
+                {candidate?.avatarInitials || 'PLM'}
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">{candidate.name || 'Candidate Profile'}</h2>
-                <p className="text-xs text-slate-600 max-w-xl mt-0.5">{candidate.headline || 'Configure your verified PLM competencies'}</p>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900">{candidate?.name || 'Candidate Profile'}</h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                    title="Edit Profile"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-600 max-w-xl mt-0.5">{candidate?.headline || 'Configure your verified PLM competencies'}</p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
-                  <span>{candidate.location || 'Location Pending'}</span>
+                  <span>{candidate?.location || 'Location Pending'}</span>
                   <span>·</span>
-                  <span className="font-mono">{candidate.email || 'No email specified'}</span>
+                  <span className="font-mono">{candidate?.email || 'No email specified'}</span>
                   <span>·</span>
-                  <span>{candidate.phone || 'No phone specified'}</span>
+                  <span>{candidate?.phone || 'No phone specified'}</span>
                 </div>
               </div>
             </div>
@@ -328,7 +348,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             <div className="text-right sm:shrink-0">
               <span className="text-xs text-slate-400 block">Total Experience</span>
               <span className="text-xl font-bold font-mono text-slate-900">
-                {candidate.yearsOfExperience} Years
+                {candidate?.yearsOfExperience ?? 0} Years
               </span>
             </div>
           </div>
@@ -340,8 +360,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                 Primary PLM Platform
               </h3>
               <div className="p-3 rounded-lg bg-slate-900 text-white text-xs font-semibold flex items-center justify-between">
-                <span>{candidate.primaryPLM}</span>
-                <span className="text-[10px] font-mono text-slate-300">{candidate.yearsOfExperience} yrs</span>
+                <span>{candidate?.primaryPLM || 'Siemens Teamcenter'}</span>
+                <span className="text-[10px] font-mono text-slate-300">{candidate?.yearsOfExperience ?? 0} yrs</span>
               </div>
             </div>
 
@@ -350,7 +370,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                 Secondary Systems
               </h3>
               <div className="flex flex-wrap gap-1.5">
-                {(candidate.secondaryPLMs || []).map(s => (
+                {(candidate?.secondaryPLMs || []).map(s => (
                   <span key={s} className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-medium">
                     {s}
                   </span>
@@ -364,7 +384,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               </h3>
               <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
-                <span>{candidate.clearance}</span>
+                <span>{candidate?.clearance || 'None'}</span>
               </div>
             </div>
           </div>
@@ -375,7 +395,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               Domain Competencies & Modules
             </h3>
             <div className="flex flex-wrap gap-2">
-              {(candidate.modules || []).map(mod => (
+              {(candidate?.modules || []).map(mod => (
                 <span key={mod} className="px-3 py-1 text-xs rounded-lg bg-slate-100 text-slate-800 font-medium">
                   {mod}
                 </span>
@@ -389,7 +409,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               Integrated CAD Tools
             </h3>
             <div className="flex flex-wrap gap-2">
-              {(candidate.cadTools || []).map(cad => (
+              {(candidate?.cadTools || []).map(cad => (
                 <span key={cad} className="px-3 py-1 text-xs rounded-lg border border-slate-200 text-slate-800 font-mono">
                   {cad}
                 </span>
@@ -403,7 +423,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               Verified OEM Certifications
             </h3>
             <div className="space-y-2">
-              {(candidate.certifications || []).map((cert, idx) => (
+              {(candidate?.certifications || []).map((cert, idx) => (
                 <div key={idx} className="flex items-center gap-2 text-xs text-slate-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{cert}</span>
@@ -418,7 +438,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               Selected Enterprise Deployments & Migrations
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(candidate.portfolioProjects || []).map((p, idx) => (
+              {(candidate?.portfolioProjects || []).map((p, idx) => (
                 <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
                   <div className="text-xs font-bold text-slate-900">{p.title}</div>
                   <div className="text-[11px] font-mono text-blue-700">{p.system}</div>
@@ -430,8 +450,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               ))}
             </div>
           </div>
-
         </div>
+
+        {/* Edit Candidate Profile Modal */}
+        <EditCandidateModal 
+          isOpen={isEditModalOpen} 
+          onClose={() => setIsEditModalOpen(false)} 
+        />
       </div>
     );
   }
@@ -534,47 +559,6 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
         </p>
       </div>
 
-      {/* Registration Callout Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold uppercase tracking-wider border border-blue-400/30">
-              Talent Registration Live
-            </span>
-            <span className="text-xs text-slate-300">
-              Active Candidate: <strong className="text-white">{candidate?.name || 'PLM Specialist'}</strong> ({candidate?.primaryPLM} · {candidate?.yearsOfExperience} yrs)
-            </span>
-          </div>
-          <h2 className="text-sm font-bold text-white">
-            Looking to register as a Candidate or hire as an Employer?
-          </h2>
-          <p className="text-xs text-slate-300 max-w-xl">
-            Register your engineering credentials to apply with 1-click, or register your company to post ITAR & enterprise PLM positions.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          {onOpenRegisterCandidateModal && (
-            <button
-              onClick={onOpenRegisterCandidateModal}
-              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Register as Candidate</span>
-            </button>
-          )}
-
-          {onOpenRegisterEmployerModal && (
-            <button
-              onClick={onOpenRegisterEmployerModal}
-              className="px-4 py-2 text-xs font-semibold text-slate-200 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl transition-colors flex items-center gap-1.5"
-            >
-              <Building2 className="w-3.5 h-3.5 text-slate-300" />
-              <span>Register as Employer</span>
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Search & Filter Controls */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-4">
@@ -688,7 +672,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
         </div>
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-          <span>Match algorithms calculated against your verified {candidate.primaryPLM || 'PLM'} profile</span>
+          <span>Match algorithms calculated against your verified {candidate?.primaryPLM || 'PLM'} profile</span>
         </div>
       </div>
 
@@ -710,7 +694,9 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
           filteredJobs.map(job => {
             const matchScore = computeMatch(job);
             const isSaved = (savedJobIds || []).includes(job.id);
-            const hasApplied = (applications || []).some(a => a.jobId === job.id && a.candidateId === (candidate?.id || ''));
+            const hasApplied = (applications || []).some(
+              a => a.jobId === job.id && (a.candidateId === candidate?.id || (candidate?.email && a.candidateEmail === candidate.email))
+            );
 
             return (
               <div
@@ -721,8 +707,8 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                   
                   {/* Employer Logo & Titles */}
                   <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl text-white font-bold flex items-center justify-center shrink-0 ${job.employerLogoBg}`}>
-                      {job.employerLogoInitials}
+                    <div className={`w-12 h-12 rounded-xl text-white font-bold flex items-center justify-center shrink-0 ${job.employerLogoBg || 'bg-slate-900'}`}>
+                      {job.employerLogoInitials || (job.title ? job.title.slice(0, 2).toUpperCase() : 'PLM')}
                     </div>
 
                     <div className="space-y-1">
@@ -744,11 +730,11 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
 
                       {/* ZERO-PILL METADATA LINE (Section 1.A Rule) */}
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        <span className="font-semibold text-slate-800">{job.employerName}</span>
+                        <span className="font-semibold text-slate-800">{job.employerName || 'Verified Enterprise'}</span>
                         <span aria-hidden="true">·</span>
-                        <span className="font-medium text-blue-900">{job.primaryPLM}</span>
+                        <span className="font-medium text-blue-900">{job.primaryPLM || 'PLM Specialist'}</span>
                         <span aria-hidden="true">·</span>
-                        <span>{job.workplaceType} ({job.location})</span>
+                        <span>{job.workplaceType || 'Remote / Hybrid'} ({job.location || 'Global'})</span>
                         <span aria-hidden="true">·</span>
                         <span className="font-mono tabular-nums text-slate-700">
                           {job.compensation?.min ? `$${job.compensation.min.toLocaleString()} - $${job.compensation.max?.toLocaleString()} ${job.compensation.period === 'hourly' ? '/ hr' : '/ yr'}` : 'Competitive Compensation'}
@@ -783,16 +769,18 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                       {hasApplied ? (
                         <button
                           onClick={() => setActiveTab('applications')}
-                          className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                          className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
                         >
-                          Applied ✓
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Applied</span>
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleOpenApplyModal(job)}
-                          className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shadow-sm"
+                          onClick={() => handleDirectApply(job)}
+                          className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shadow-sm flex items-center gap-1.5"
                         >
-                          1-Click Apply
+                          <Zap className="w-3.5 h-3.5 text-amber-300" />
+                          <span>1-Click Apply</span>
                         </button>
                       )}
                     </div>
@@ -832,121 +820,165 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
       </div>
 
       {/* JOB SPECIFICATION MODAL */}
-      {selectedJob && !isApplying && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-xl text-white font-bold flex items-center justify-center shrink-0 ${selectedJob.employerLogoBg}`}>
-                  {selectedJob.employerLogoInitials}
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">{selectedJob.title}</h2>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
-                    <span className="font-semibold text-slate-800">{selectedJob.employerName}</span>
-                    <span>·</span>
-                    <span>{selectedJob.primaryPLM}</span>
-                    <span>·</span>
-                    <span>{selectedJob.workplaceType}</span>
-                    <span>·</span>
-                    <span className="font-mono text-slate-700">
-                      {selectedJob.compensation?.min ? `$${selectedJob.compensation.min.toLocaleString()} - $${selectedJob.compensation.max?.toLocaleString()}` : 'Competitive'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedJob(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {selectedJob && !isApplying && (() => {
+        const hasAppliedToSelected = Boolean(
+          (applications || []).some(
+            a => a.jobId === selectedJob.id && (a.candidateId === candidate?.id || (candidate?.email && a.candidateEmail === candidate.email))
+          )
+        );
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-700 leading-relaxed">
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
               
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Role Overview
-                </h3>
-                <p>{selectedJob.summary}</p>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Key Technical Responsibilities
-                </h3>
-                <ul className="space-y-2 list-disc pl-5">
-                  {(selectedJob.responsibilities || []).map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Prerequisites & Qualifications
-                </h3>
-                <ul className="space-y-2 list-disc pl-5">
-                  {(selectedJob.requirements || []).map((req, i) => (
-                    <li key={i}>{req}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">
-                    Required PLM Modules
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(selectedJob.requiredModules || []).map(m => (
-                      <span key={m} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px]">
-                        {m}
-                      </span>
-                    ))}
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-start justify-between">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-xl text-white font-bold flex items-center justify-center shrink-0 ${selectedJob.employerLogoBg || 'bg-slate-900'}`}>
+                    {selectedJob.employerLogoInitials || (selectedJob.title ? selectedJob.title.slice(0, 2).toUpperCase() : 'PLM')}
                   </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">{selectedJob.title}</h2>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
+                      <span className="font-semibold text-slate-800">{selectedJob.employerName || 'Verified Enterprise'}</span>
+                      <span>·</span>
+                      <span>{selectedJob.primaryPLM || 'PLM Specialist'}</span>
+                      <span>·</span>
+                      <span>{selectedJob.workplaceType || 'Remote / Hybrid'}</span>
+                      <span>·</span>
+                      <span className="font-mono text-slate-700">
+                        {selectedJob.compensation?.min ? `$${selectedJob.compensation.min.toLocaleString()} - $${selectedJob.compensation.max?.toLocaleString()}` : 'Competitive Compensation'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedJob(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-700 leading-relaxed">
+                
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Role Overview
+                  </h3>
+                  <p>{selectedJob.summary || 'Enterprise engineering role focusing on PLM architecture, system administration, and digital thread integration.'}</p>
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">
-                    CAD Integrations
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(selectedJob.cadIntegration || []).map(c => (
-                      <span key={c} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px] font-mono">
-                        {c}
-                      </span>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Key Technical Responsibilities
+                  </h3>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {(selectedJob.responsibilities && selectedJob.responsibilities.length > 0 ? selectedJob.responsibilities : [
+                      'Architect, configure, and maintain enterprise PLM environments and data models.',
+                      'Collaborate with multi-disciplinary engineering teams to support CAD integrations and release processes.',
+                      'Design lifecycle workflows, access rules, and automated revision controls.'
+                    ]).map((r, i) => (
+                      <li key={i}>{r}</li>
                     ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Prerequisites & Qualifications
+                  </h3>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {(selectedJob.requirements && selectedJob.requirements.length > 0 ? selectedJob.requirements : [
+                      'Demonstrated hands-on experience in enterprise PLM systems and data schemas.',
+                      'Solid understanding of CAD data management and product lifecycle best practices.'
+                    ]).map((req, i) => (
+                      <li key={i}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                      Required PLM Modules
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(selectedJob.requiredModules && selectedJob.requiredModules.length > 0 ? selectedJob.requiredModules : ['BOM & Part Architecture', 'Engineering Change']).map(m => (
+                        <span key={m} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px]">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                      CAD Integrations
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(selectedJob.cadIntegration && selectedJob.cadIntegration.length > 0 ? selectedJob.cadIntegration : ['Enterprise CAD Suites']).map(c => (
+                        <span key={c} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px] font-mono">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  onClick={() => setSelectedJob(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+                >
+                  Close
+                </button>
+
+                {hasAppliedToSelected ? (
+                  <div className="flex items-center gap-2">
+                    <span className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Application Submitted</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedJob(null);
+                        setActiveTab('applications');
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      View in Pipeline →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenApplyModal(selectedJob)}
+                      className="px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      Apply with Custom Note
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDirectApply(selectedJob)}
+                      className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                      <span>1-Click Apply Now</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
             </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <button
-                onClick={() => setSelectedJob(null)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
-              >
-                Close
-              </button>
-
-              <button
-                onClick={() => handleOpenApplyModal(selectedJob)}
-                className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
-              >
-                Proceed to 1-Click Application
-              </button>
-            </div>
-
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 1-CLICK APPLY MODAL */}
       {isApplying && selectedJob && (
@@ -975,13 +1007,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               {/* Profile Overview Card */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-slate-900">{candidate.name}</div>
+                  <div className="font-semibold text-slate-900">{candidate?.name || 'Candidate'}</div>
                   <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-semibold border border-emerald-200">
                     {computeMatch(selectedJob)}% PLM Match
                   </span>
                 </div>
                 <div className="text-slate-600 text-[11px]">
-                  {candidate.primaryPLM} · {candidate.yearsOfExperience} yrs · {candidate.clearance}
+                  {candidate?.primaryPLM || 'Siemens Teamcenter'} · {candidate?.yearsOfExperience ?? 0} yrs · {candidate?.clearance || 'None'}
                 </div>
               </div>
 

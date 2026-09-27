@@ -59,9 +59,9 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
   const [website, setWebsite] = useState('');
   const [taxRegistrationNumber, setTaxRegistrationNumber] = useState('');
   const [about, setAbout] = useState('');
-  const [selectedPLMStack, setSelectedPLMStack] = useState<PLMSystem[]>(['Siemens Teamcenter']);
-  const [selectedCAD, setSelectedCAD] = useState<CADTool[]>(['Siemens NX']);
-  const [docName, setDocName] = useState('Enterprise_Tax_Registration_Proof.pdf');
+  const [selectedPLMStack, setSelectedPLMStack] = useState<PLMSystem[]>([]);
+  const [selectedCAD, setSelectedCAD] = useState<CADTool[]>([]);
+  const [docName, setDocName] = useState('');
 
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [registeredId, setRegisteredId] = useState('');
@@ -81,25 +81,6 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
     );
   };
 
-  const handleFillDemo = () => {
-    setCompanyName('Lockheed Pratt Propulsion');
-    setLegalEntity('Lockheed Pratt Propulsion Systems LLC');
-    setCorporateDomain('lockheedpratt.space');
-    setContactPerson('Dr. Richard Sterling');
-    setContactTitle('Director of PLM & Systems Engineering');
-    setContactEmail('r.sterling@lockheedpratt.space');
-    setAdminEmail('it-clearance@lockheedpratt.space');
-    setIndustry('Aerospace & Defense');
-    setHeadquarters('Orlando, FL, USA');
-    setCompanySize('2,500 - 5,000 employees');
-    setWebsite('https://lockheedpratt.space');
-    setTaxRegistrationNumber('EIN-59-3829104');
-    setSelectedPLMStack(['Siemens Teamcenter', 'PTC Windchill']);
-    setSelectedCAD(['Siemens NX', 'PTC Creo']);
-    setDocName('Lockheed_Pratt_CMMC_ITAR_Registration.pdf');
-    setAbout('Defense contractor manufacturing space propulsion units and thermal shielding. Operating Siemens Teamcenter Active Workspace 6.3 with classified ITAR network silos.');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName || !contactEmail || !taxRegistrationNumber) return;
@@ -108,22 +89,22 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
 
     try {
       const id = await registerEmployer({
-        companyName,
-        legalEntity: legalEntity || companyName,
-        corporateDomain: corporateDomain || `${companyName.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-        contactEmail,
-        adminEmail: adminEmail || contactEmail,
-        contactPerson: contactPerson || 'Engineering Lead',
-        contactTitle: contactTitle || 'PLM Program Manager',
+        companyName: companyName.trim(),
+        legalEntity: legalEntity.trim() || companyName.trim(),
+        corporateDomain: corporateDomain.trim() || (contactEmail.includes('@') ? contactEmail.split('@')[1] : ''),
+        contactEmail: contactEmail.trim(),
+        adminEmail: adminEmail.trim() || contactEmail.trim(),
+        contactPerson: contactPerson.trim(),
+        contactTitle: contactTitle.trim(),
         industry,
-        headquarters: headquarters || 'Austin, TX, USA',
+        headquarters: headquarters.trim() || 'Global / Remote',
         companySize,
-        website: website || `https://${corporateDomain || 'example.com'}`,
+        website: website.trim(),
         primaryPLMStack: selectedPLMStack,
         cadEnvironments: selectedCAD,
-        taxRegistrationNumber,
-        verificationDocName: docName,
-        about: about || `Enterprise engineering organization running ${selectedPLMStack.join(' and ')}.`,
+        taxRegistrationNumber: taxRegistrationNumber.trim(),
+        verificationDocName: docName.trim() || undefined,
+        about: about.trim(),
       });
 
       setRegisteredId(id);
@@ -207,20 +188,6 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-            
-            {/* Quick Demo Pre-fill */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/70 border border-blue-100">
-              <div className="text-xs text-blue-900">
-                <strong>Quick Test?</strong> Pre-populate authentic aerospace defense enterprise credentials.
-              </div>
-              <button
-                type="button"
-                onClick={handleFillDemo}
-                className="px-3 py-1 text-xs font-semibold text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-2xs"
-              >
-                Auto-Fill Enterprise
-              </button>
-            </div>
 
             {/* Company & Legal Info */}
             <div className="space-y-4">
