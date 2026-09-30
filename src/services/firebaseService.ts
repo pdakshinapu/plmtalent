@@ -17,6 +17,7 @@ import {
   EmployerProfile,
   Job,
   Application,
+  JobInvitation,
 } from "../types";
 
 export const COLLECTIONS = {
@@ -26,6 +27,7 @@ export const COLLECTIONS = {
   APPLICATIONS: "applications",
   CANDIDATES: "candidates",
   SAVED_JOBS: "saved_jobs",
+  JOB_INVITATIONS: "job_invitations",
 };
 
 // Purge any legacy dummy data from Firestore
@@ -158,7 +160,15 @@ export function subscribeToCandidates(
       const list: CandidateProfile[] = [];
       snapshot.forEach((d) => {
         if (!DUMMY_IDS.CANDIDATES.includes(d.id)) {
-          list.push({ id: d.id, ...d.data() } as CandidateProfile);
+          const data = d.data() as CandidateProfile;
+          if (data && (data.name || data.headline || data.primaryPLM)) {
+            list.push({
+              ...data,
+              id: d.id,
+              name: data.name || 'PLM Specialist',
+              headline: data.headline || 'Verified PLM Specialist',
+            } as CandidateProfile);
+          }
         }
       });
       onData(list);
@@ -169,6 +179,41 @@ export function subscribeToCandidates(
   } catch (err) {
     console.warn("Failed to subscribe to candidates:", err);
     return () => {};
+  }
+}
+
+// Subscribe to Job Invitations
+export function subscribeToJobInvitations(
+  onData: (invitations: JobInvitation[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const colRef = collection(db, COLLECTIONS.JOB_INVITATIONS);
+    return onSnapshot(colRef, (snapshot) => {
+      const list: JobInvitation[] = [];
+      snapshot.forEach((d) => {
+        list.push({ id: d.id, ...d.data() } as JobInvitation);
+      });
+      onData(list);
+    }, (error) => {
+      console.warn("Firestore job_invitations listener error:", error);
+      onError?.(error);
+    });
+  } catch (err) {
+    console.warn("Failed to subscribe to job_invitations:", err);
+    return () => {};
+  }
+}
+
+// Save or Update Job Invitation in Firestore
+export async function saveJobInvitationToFirestore(invitation: JobInvitation) {
+  try {
+    const docRef = doc(db, COLLECTIONS.JOB_INVITATIONS, invitation.id);
+    await setDoc(docRef, invitation, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Error saving job invitation to Firestore:", error);
+    return false;
   }
 }
 

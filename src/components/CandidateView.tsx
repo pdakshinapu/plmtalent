@@ -26,6 +26,7 @@ import {
   Zap
 } from 'lucide-react';
 import { EditCandidateModal } from './EditCandidateModal';
+import { CandidateInvitationsView } from './CandidateInvitationsView';
 
 interface CandidateViewProps {
   activeTab: string;
@@ -143,13 +144,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
     setSelectedJob(job);
     const reqMods = job.requiredModules || [];
     setCoverNote(
-      `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate?.yearsOfExperience || 3} years dedicated to ${candidate?.primaryPLM || job.primaryPLM || 'PLM'}, I have extensive experience in ${reqMods.slice(0, 2).join(' and ') || 'system architecture'}.\n\nMy profile and certifications are verified on PLM Nexus.`
+      `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role. With ${candidate?.yearsOfExperience || 3} years dedicated to ${candidate?.primaryPLM || job.primaryPLM || 'PLM'}, I have extensive experience in ${reqMods.slice(0, 2).join(' and ') || 'system architecture'}.\n\nMy profile and certifications are verified on PLMSpider.`
     );
     setIsApplying(true);
   };
 
   const handleDirectApply = (job: Job) => {
-    const defaultCoverNote = `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role via verified 1-click application. My PLM credentials and experience are verified on PLM Nexus.`;
+    const defaultCoverNote = `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role via verified 1-click application. My PLM credentials and experience are verified on PLMSpider.`;
     return applyToJob(job.id, defaultCoverNote, resumeFileName);
   };
 
@@ -288,6 +289,18 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
     );
   }
 
+  // Sub-view: Incoming Job Invitations & Active Direct Connections
+  if (activeTab === 'invitations' || activeTab === 'invites' || activeTab === 'matches' || activeTab === 'connections') {
+    return (
+      <div className="py-2">
+        <CandidateInvitationsView 
+          initialTab={activeTab === 'connections' ? 'connections' : activeTab === 'invitations' ? 'invitations' : 'all'}
+          onBackToJobs={() => setActiveTab('explore')} 
+        />
+      </div>
+    );
+  }
+
   if (activeTab === 'profile') {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -337,10 +350,12 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                 <p className="text-xs text-slate-600 max-w-xl mt-0.5">{candidate?.headline || 'Configure your verified PLM competencies'}</p>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
                   <span>{candidate?.location || 'Location Pending'}</span>
-                  <span>·</span>
-                  <span className="font-mono">{candidate?.email || 'No email specified'}</span>
-                  <span>·</span>
-                  <span>{candidate?.phone || 'No phone specified'}</span>
+                  {candidate?.phone && (
+                    <>
+                      <span>·</span>
+                      <span className="font-mono">{candidate.phone}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1046,7 +1061,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               </div>
 
               <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-100 text-[11px] text-blue-900">
-                Submitting this application triggers an automated email alert to the employer's engineering talent lead and logs into their ATS Kanban.
+                Submitting this application securely dispatches your verified credentials and resume to the employer's talent team.
               </div>
 
               <div className="pt-2 flex items-center justify-between">

@@ -68,12 +68,45 @@ export interface CandidateProfile {
   accentColor: string;
   resumeFileName?: string;
   profileVisibility?: CandidateProfileVisibility;
+  region?: string;
+  seniorityLevel?: string;
+  employmentTypes?: string[];
+  workLocationPreferences?: string[];
+  workAuthorization?: string;
+  skillsList?: string[];
+  platformsList?: string[];
+  industriesList?: string[];
+  educationList?: string[];
+  languagesList?: string[];
   portfolioProjects: {
     title: string;
     system: string;
     description: string;
     impact: string;
   }[];
+}
+
+export interface JobInvitation {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  employerId: string;
+  employerName: string;
+  employerLegalEntity?: string;
+  employerCorporateDomain?: string;
+  employerTaxNumber?: string;
+  candidateId: string;
+  candidateName: string;
+  candidateHeadline: string;
+  proposedCompensation?: string;
+  workplaceType?: string;
+  location?: string;
+  jobSummary: string;
+  jobRequirements?: string[];
+  invitationNote?: string;
+  sentAt: string;
+  status: 'pending' | 'accepted' | 'declined';
+  respondedAt?: string;
 }
 
 export interface EmployerProfile {

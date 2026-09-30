@@ -37,6 +37,8 @@ import {
 import { AddCustomOptionButton } from './AddCustomOptionButton';
 import { CurrencySelector } from './CurrencySelector';
 import { formatCompensation, getCurrencySymbol } from '../utils/currency';
+import { CandidateSimpleListView } from './CandidateSimpleListView';
+import { EmployerConnectionsView } from './EmployerConnectionsView';
 
 interface EmployerViewProps {
   activeTab: string;
@@ -194,7 +196,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
       id: app.candidateId || `cand-${app.id}`,
       name: app.candidateName,
       headline: app.candidateHeadline || `${primaryPLM} Specialist`,
-      email: app.candidateEmail || 'candidate@example.com',
+      email: app.candidateEmail || '',
       phone: '',
       location: 'Remote',
       yearsOfExperience: experience,
@@ -509,13 +511,10 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                   Contact & Location
                 </h3>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
-                  <a 
-                    href={`mailto:${inspectedCandidate.email || ''}`}
-                    className="flex items-center gap-1.5 text-blue-600 hover:underline font-semibold"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    {inspectedCandidate.email || 'candidate@example.com'}
-                  </a>
+                  <span className="flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Verified Talent Profile</span>
+                  </span>
                   {inspectedCandidate.phone && (
                     <a 
                       href={`tel:${inspectedCandidate.phone}`}
@@ -561,13 +560,9 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
 
           {/* Modal Footer */}
           <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-            <a
-              href={`mailto:${inspectedCandidate.email || ''}?subject=PLM Opportunity Discussion`}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Email Candidate</span>
-            </a>
+            <div className="text-xs text-slate-500 font-medium">
+              Verified Candidate Profile
+            </div>
             <button
               type="button"
               onClick={() => setInspectedCandidate(null)}
@@ -1606,20 +1601,12 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                                         )}
 
                                         {/* Contact Information */}
-                                        {(cand.email || cand.phone) && (
+                                        {cand.phone && (
                                           <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                                            {cand.email && (
-                                              <span className="flex items-center gap-1 font-mono">
-                                                <Mail className="w-3 h-3 text-slate-400" />
-                                                {cand.email}
-                                              </span>
-                                            )}
-                                            {cand.phone && (
-                                              <span className="flex items-center gap-1 font-mono">
-                                                <Phone className="w-3 h-3 text-slate-400" />
-                                                {cand.phone}
-                                              </span>
-                                            )}
+                                            <span className="flex items-center gap-1 font-mono">
+                                              <Phone className="w-3 h-3 text-slate-400" />
+                                              {cand.phone}
+                                            </span>
                                           </div>
                                         )}
                                       </div>
@@ -1997,9 +1984,6 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                 <div className="text-slate-600">
                   Primary PLM: <strong className="text-slate-800">{inspectedApp.candidatePrimaryPLM}</strong> ({inspectedApp.candidateExperience} years experience)
                 </div>
-                <div className="text-slate-600">
-                  Email: <span className="font-mono text-slate-800">{inspectedApp.candidateEmail}</span>
-                </div>
                 <div className="text-slate-600 flex items-center gap-1.5 pt-1">
                   <FileText className="w-4 h-4 text-blue-600" />
                   <span>Attached: <strong className="font-mono">{inspectedApp.resumeFileName}</strong></span>
@@ -2058,185 +2042,20 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
     );
   }
 
-  // Sub-view: Search & Browse PLM Job Seeker Profiles
+  // Sub-view: Search & Browse PLM Job Seeker Profiles (Simple PLM Advisors format & Direct Connect)
   if (activeTab === 'search-candidates') {
-    const filteredCandidates = allCandidates.filter(c => {
-      const q = candidateSearch.trim().toLowerCase();
-      const matchesQuery = !q ||
-        c.name.toLowerCase().includes(q) ||
-        c.headline.toLowerCase().includes(q) ||
-        c.primaryPLM.toLowerCase().includes(q) ||
-        c.modules.some(m => m.toLowerCase().includes(q)) ||
-        c.cadTools.some(t => t.toLowerCase().includes(q));
-      const matchesPLM = candidateFilterPLM === 'All' ||
-        c.primaryPLM === candidateFilterPLM ||
-        c.secondaryPLMs.includes(candidateFilterPLM);
-      const matchesClearance = candidateFilterClearance === 'All' || c.clearance === candidateFilterClearance;
-      const matchesExp = (c.yearsOfExperience || 0) >= candidateFilterMinExp;
-      return matchesQuery && matchesPLM && matchesClearance && matchesExp;
-    });
-
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">
-            Search PLM Job Seeker Profiles
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Browse and filter verified candidates by PLM platform, modules, clearance, and experience
-          </p>
-        </div>
+      <div className="py-2">
+        <CandidateSimpleListView />
+      </div>
+    );
+  }
 
-        {/* Search & Filters */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={candidateSearch}
-              onChange={(e) => setCandidateSearch(e.target.value)}
-              placeholder="Search by name, headline, PLM system, module, or CAD tool..."
-              className="w-full pl-9 pr-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Primary / Secondary PLM System</label>
-              <select
-                value={candidateFilterPLM}
-                onChange={(e) => setCandidateFilterPLM(e.target.value as PLMSystem | 'All')}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg cursor-pointer"
-              >
-                <option value="All">All PLM Systems</option>
-                {ALL_PLM_SYSTEMS.map(sys => (
-                  <option key={sys} value={sys}>{sys}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Defense / Export Clearance</label>
-              <select
-                value={candidateFilterClearance}
-                onChange={(e) => setCandidateFilterClearance(e.target.value as ClearanceLevel | 'All')}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg cursor-pointer"
-              >
-                <option value="All">Any Clearance Level</option>
-                <option value="None">None</option>
-                <option value="ITAR / Export Controlled">ITAR / Export Controlled</option>
-                <option value="Secret">Secret</option>
-                <option value="Top Secret">Top Secret</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Minimum Years of Experience</label>
-              <select
-                value={candidateFilterMinExp}
-                onChange={(e) => setCandidateFilterMinExp(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg cursor-pointer"
-              >
-                {[0, 2, 5, 8, 10, 15].map(y => (
-                  <option key={y} value={y}>{y === 0 ? 'Any Experience' : `${y}+ Years`}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Results */}
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-500">
-            {filteredCandidates.length} candidate{filteredCandidates.length === 1 ? '' : 's'} found
-          </p>
-        </div>
-
-        {filteredCandidates.length === 0 ? (
-          <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
-            <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-900">No matching PLM profiles</h3>
-            <p className="text-xs text-slate-500 mt-1">Try widening your filters or search terms.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCandidates.map(c => {
-              const showContact = c.profileVisibility ? c.profileVisibility.contact !== false : true;
-              const showPlatforms = c.profileVisibility ? c.profileVisibility.platforms !== false : true;
-              return (
-                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${c.accentColor || 'from-blue-600 to-indigo-600'} text-white font-bold text-sm flex items-center justify-center shadow-sm shrink-0`}>
-                        {c.avatarInitials || 'PLM'}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-slate-900 truncate">{c.name}</h3>
-                          {c.verifiedSpecialist && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                        </div>
-                        <p className="text-xs text-slate-500 truncate">{c.headline}</p>
-                      </div>
-                    </div>
-
-                    {showContact && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-3">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{c.location || 'Location not specified'}</span>
-                      </div>
-                    )}
-
-                    {showPlatforms ? (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        <span className="px-2 py-1 rounded-md bg-slate-900 text-white text-[11px] font-semibold">
-                          {c.primaryPLM}
-                        </span>
-                        <span className="px-2 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold">
-                          {c.yearsOfExperience} yrs
-                        </span>
-                        {c.clearance !== 'None' && (
-                          <span className="px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
-                            {c.clearance}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-3">
-                        <Lock className="w-3 h-3" />
-                        <span>PLM platform details kept private</span>
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {c.modules.slice(0, 3).map(m => (
-                        <span key={m} className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 text-[10px]">
-                          {m}
-                        </span>
-                      ))}
-                      {c.modules.length > 3 && (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-500 text-[10px]">
-                          +{c.modules.length - 3} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setInspectedCandidate(c)}
-                    className="mt-4 w-full py-2 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View Full Profile</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Unified Candidate Profile Skills Modal */}
-        {renderCandidateProfileModal()}
-
+  // Sub-view: Employer Direct Connections & Sent Job Invitations
+  if (activeTab === 'connections' || activeTab === 'matches') {
+    return (
+      <div className="py-2">
+        <EmployerConnectionsView onBrowseCandidates={() => setActiveTab('search-candidates')} />
       </div>
     );
   }

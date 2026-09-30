@@ -31,8 +31,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   const redirectUrl = searchParams.get('redirect');
   const initialRoleParam = searchParams.get('role') as UserRole | null;
+  const initialModeParam = searchParams.get('mode');
 
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(() => {
+    if (initialModeParam === 'signup' || initialModeParam === 'register') {
+      return 'signup';
+    }
+    return 'signin';
+  });
   const [selectedRole, setSelectedRole] = useState<'candidate' | 'employer'>(() => {
     if (initialRoleParam && ['candidate', 'employer'].includes(initialRoleParam)) {
       return initialRoleParam as 'candidate' | 'employer';
@@ -48,17 +54,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // If already authenticated, redirect to authorized destination
+  // If already authenticated, redirect to authorized destination matching DB role
   useEffect(() => {
     if (userSession) {
-      if (redirectUrl) {
-        navigate(redirectUrl);
-      } else if (userSession.role === 'candidate') {
-        navigate('/job-seeker');
-      } else if (userSession.role === 'employer') {
-        navigate('/job-provider');
-      } else if (userSession.role === 'admin') {
-        navigate('/admin');
+      const targetRolePath = userSession.role === 'candidate' 
+        ? '/job-seeker' 
+        : userSession.role === 'employer' 
+        ? '/job-provider' 
+        : '/admin';
+
+      if (redirectUrl && redirectUrl.startsWith(targetRolePath)) {
+        navigate(redirectUrl, { replace: true });
+      } else {
+        navigate(targetRolePath, { replace: true });
       }
     }
   }, [userSession, redirectUrl, navigate]);
@@ -84,7 +92,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       let activeRole: UserRole = selectedRole;
       if (authMode === 'signin') {
-        const res = await login(email.trim(), password, selectedRole);
+        // Dynamic role resolution from DB profile - do not force role
+        const res = await login(email.trim(), password);
         if (!res.success) {
           setErrorMsg(res.message || 'Authentication failed. Please verify credentials.');
           return;
@@ -104,13 +113,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         }
       }
 
-      // Successful auth - redirect based on DB-assigned role
-      if (redirectUrl) {
-        navigate(redirectUrl);
+      // Successful auth - redirect based on dynamic role from account
+      const targetRolePath = activeRole === 'candidate' 
+        ? '/job-seeker' 
+        : activeRole === 'employer' 
+        ? '/job-provider' 
+        : '/admin';
+
+      if (redirectUrl && redirectUrl.startsWith(targetRolePath)) {
+        navigate(redirectUrl, { replace: true });
       } else {
-        if (activeRole === 'candidate') navigate('/job-seeker');
-        if (activeRole === 'employer') navigate('/job-provider');
-        if (activeRole === 'admin') navigate('/admin');
+        navigate(targetRolePath, { replace: true });
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'Authentication error. Please try again.');
@@ -123,18 +136,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setErrorMsg(null);
     setIsGoogleLoading(true);
     try {
-      const res = await loginWithGoogle(selectedRole);
+      // In sign-in, pass undefined so role is determined dynamically from Firestore.
+      // In sign-up, pass selectedRole so if a new user record is created, it uses the selected role.
+      const res = await loginWithGoogle(authMode === 'signup' ? selectedRole : undefined);
       if (!res.success) {
         setErrorMsg(res.message || 'Could not sign in with Google.');
         return;
       }
       const activeRole = res.role || selectedRole;
-      if (redirectUrl) {
-        navigate(redirectUrl);
+      const targetRolePath = activeRole === 'candidate' 
+        ? '/job-seeker' 
+        : activeRole === 'employer' 
+        ? '/job-provider' 
+        : '/admin';
+
+      if (redirectUrl && redirectUrl.startsWith(targetRolePath)) {
+        navigate(redirectUrl, { replace: true });
       } else {
-        if (activeRole === 'candidate') navigate('/job-seeker');
-        if (activeRole === 'employer') navigate('/job-provider');
-        if (activeRole === 'admin') navigate('/admin');
+        navigate(targetRolePath, { replace: true });
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'Google sign-in error. Please try again.');
@@ -149,16 +168,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         
         {/* Brand Header */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600 text-white font-black text-xl shadow-lg shadow-blue-500/20 mb-3">
-            PLM
-          </div>
+          <img 
+            src="/plmspider-logo.png" 
+            alt="PLMSpider" 
+            className="h-14 w-auto mx-auto object-contain mb-3 drop-shadow-xs" 
+          />
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            {authMode === 'signin' ? 'Sign In to PLM Nexus' : 'Create Verified Account'}
+            {authMode === 'signin' ? 'Sign In to PLMSpider' : 'Create Verified Account'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {authMode === 'signin' 
-              ? 'Access your authenticated engineering workspace and enterprise portal' 
-              : 'Register your Firebase user to access Teamcenter, Windchill & 3DEXPERIENCE opportunities'}
+              ? 'Enter your credentials to access your engineering or employer workspace' 
+              : 'Register your account to access Teamcenter, Windchill & 3DEXPERIENCE opportunities'}
           </p>
         </div>
 
@@ -191,41 +212,43 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </button>
           </div>
 
-          {/* STEP 1: Select Role */}
-          <div className="mb-5">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Select Your Role / Portal
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => { setSelectedRole('candidate'); setErrorMsg(null); }}
-                className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                  selectedRole === 'candidate'
-                    ? 'border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                }`}
-              >
-                <UserCheck className={`w-5 h-5 mx-auto mb-1.5 ${selectedRole === 'candidate' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <span className="text-xs font-semibold block leading-tight">Job Seeker</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Engineering Specialist</span>
-              </button>
+          {/* STEP 1: Select Role (Only during Sign Up / Create Account) */}
+          {authMode === 'signup' && (
+            <div className="mb-5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                I am joining as a
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedRole('candidate'); setErrorMsg(null); }}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    selectedRole === 'candidate'
+                      ? 'border-[#BA3A2C] bg-[#BA3A2C]/10 text-[#BA3A2C] font-bold shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <UserCheck className={`w-5 h-5 mx-auto mb-1.5 ${selectedRole === 'candidate' ? 'text-[#BA3A2C]' : 'text-slate-400'}`} />
+                  <span className="text-xs font-semibold block leading-tight">Job Seeker</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">Engineering Specialist</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => { setSelectedRole('employer'); setErrorMsg(null); }}
-                className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                  selectedRole === 'employer'
-                    ? 'border-indigo-600 bg-indigo-50/80 text-indigo-900 font-bold shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                }`}
-              >
-                <Building2 className={`w-5 h-5 mx-auto mb-1.5 ${selectedRole === 'employer' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span className="text-xs font-semibold block leading-tight">Job Provider</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Enterprise Employer</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedRole('employer'); setErrorMsg(null); }}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    selectedRole === 'employer'
+                      ? 'border-[#0B2545] bg-[#0B2545]/10 text-[#0B2545] font-bold shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <Building2 className={`w-5 h-5 mx-auto mb-1.5 ${selectedRole === 'employer' ? 'text-[#0B2545]' : 'text-slate-400'}`} />
+                  <span className="text-xs font-semibold block leading-tight">Job Provider</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">Enterprise Employer</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Google Sign-In */}
           <button
@@ -240,7 +263,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               <path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.6 35.3 26.9 36 24 36c-5.3 0-9.7-3.4-11.3-8l-6.6 5.1C9.9 39.6 16.4 44 24 44z"/>
               <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.4C41.4 35.9 44 30.4 44 24c0-1.2-.1-2.4-.4-3.5z"/>
             </svg>
-            <span>{isGoogleLoading ? 'Connecting to Google...' : `Continue with Google as ${selectedRole === 'candidate' ? 'Job Seeker' : 'Job Provider'}`}</span>
+            <span>
+              {isGoogleLoading 
+                ? 'Connecting to Google...' 
+                : authMode === 'signin' 
+                  ? 'Continue with Google' 
+                  : `Register with Google as ${selectedRole === 'candidate' ? 'Job Seeker' : 'Job Provider'}`}
+            </span>
           </button>
 
           <div className="flex items-center gap-3 my-5">
@@ -342,18 +371,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-3 py-3 px-4 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full mt-3 py-3 px-4 rounded-xl font-bold text-xs bg-[#BA3A2C] hover:bg-[#9E2F23] text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {authMode === 'signin' ? (
                 <>
-                  <KeyRound className="w-4 h-4 text-slate-300" />
-                  <span>{isLoading ? 'Authenticating with Firebase...' : `Sign In as ${selectedRole === 'candidate' ? 'Job Seeker' : 'Job Provider'}`}</span>
+                  <KeyRound className="w-4 h-4 text-white" />
+                  <span>{isLoading ? 'Signing In...' : 'Sign In'}</span>
                   <ArrowRight className="w-4 h-4 ml-0.5" />
                 </>
               ) : (
                 <>
-                  <UserPlus className="w-4 h-4 text-slate-300" />
-                  <span>{isLoading ? 'Creating Firebase Account...' : `Create ${selectedRole === 'candidate' ? 'Job Seeker' : 'Job Provider'} Account`}</span>
+                  <UserPlus className="w-4 h-4 text-white" />
+                  <span>{isLoading ? 'Creating Account...' : `Create ${selectedRole === 'candidate' ? 'Job Seeker' : 'Job Provider'} Account`}</span>
                   <ArrowRight className="w-4 h-4 ml-0.5" />
                 </>
               )}

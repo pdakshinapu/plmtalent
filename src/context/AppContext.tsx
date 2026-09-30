@@ -5,7 +5,8 @@ import {
   EmployerProfile, 
   Job, 
   Application,
-  UserSession
+  UserSession,
+  JobInvitation
 } from '../types';
 import { auth, db, googleProvider } from '../firebase';
 import { 
@@ -29,6 +30,8 @@ import {
   saveJobToFirestore,
   saveApplicationToFirestore,
   updateCandidateInFirestore,
+  subscribeToJobInvitations,
+  saveJobInvitationToFirestore,
 } from '../services/firebaseService';
 import {
   PlatformChoices,
@@ -62,13 +65,19 @@ interface AppContextType {
   currentUser: User | null;
   userSession: UserSession | null;
   isAuthReady: boolean;
-  login: (email: string, password: string, targetRole: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
+  login: (email: string, password: string, targetRole?: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
   signUp: (email: string, password: string, targetRole: UserRole, name?: string, companyName?: string) => Promise<{ success: boolean; message?: string }>;
-  loginWithGoogle: (targetRole: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
+  loginWithGoogle: (targetRole?: UserRole) => Promise<{ success: boolean; message?: string; role?: UserRole }>;
   logout: () => Promise<void>;
   isFirebaseConnected: boolean;
   // Dynamic platform choices managed by admin
   platformChoices: PlatformChoices;
+  // Enterprise Direct Connect & Job Invitations
+  jobInvitations: JobInvitation[];
+  sendJobInvitation: (invite: Omit<JobInvitation, 'id' | 'sentAt' | 'status'>) => { success: boolean; message: string };
+  respondToJobInvitation: (invitationId: string, accept: boolean) => void;
+  isConnected: (candidateId: string, employerId?: string) => boolean;
+  getConnectionForCandidate: (candidateId: string, employerId?: string) => JobInvitation | undefined;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -146,13 +155,32 @@ const createDefaultEmployerProfile = (userId: string, companyName: string, userN
   };
 };
 
+const STORAGE_KEY_JOB_INVITATIONS = 'plm_nexus_job_invitations_v1';
+
+const loadSavedJobInvitations = (): JobInvitation[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_JOB_INVITATIONS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Ensure no mock seed items are loaded
+    return parsed.filter((inv: any) => inv && inv.id !== 'invite-seed-001' && inv.employerId !== 'emp-apex');
+  } catch (e) {
+    return [];
+  }
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRoleState] = useState<UserRole>('candidate');
+  const [roleState, setRoleState] = useState<UserRole>('candidate');
   const [userSession, setUserSession] = useState<UserSession | null>(null);
+  // Single source of truth: role is strictly determined by the DB userSession.role when logged in
+  const role: UserRole = userSession?.role || roleState;
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
   const [allCandidates, setAllCandidates] = useState<CandidateProfile[]>([]);
+  const [jobInvitations, setJobInvitations] = useState<JobInvitation[]>(loadSavedJobInvitations);
   const [employers, setEmployers] = useState<EmployerProfile[]>([]);
   const [currentEmployerId, setCurrentEmployerIdState] = useState<string>('');
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -161,6 +189,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
   const [platformChoices, setPlatformChoices] = useState<PlatformChoices>(DEFAULT_CHOICES);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_JOB_INVITATIONS, JSON.stringify(jobInvitations));
+    } catch (e) {
+      console.warn('Failed to save job invitations to localStorage:', e);
+    }
+  }, [jobInvitations]);
 
   // Initialize Firebase listeners and purge any old dummy data
   useEffect(() => {
@@ -202,11 +238,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const candDocRef = doc(db, COLLECTIONS.CANDIDATES, firebaseUser.uid);
             const candSnap = await getDoc(candDocRef);
             if (candSnap.exists()) {
-              setCandidate(candSnap.data() as CandidateProfile);
+              const cdata = candSnap.data() as CandidateProfile;
+              setCandidate(cdata);
+              if (cdata.name && cdata.name !== userName) {
+                userName = cdata.name;
+                setUserSession(prev => prev ? { ...prev, name: cdata.name } : null);
+              }
             } else {
               const newCand = createDefaultCandidateProfile(firebaseUser.uid, userName, firebaseUser.email || '');
-              await updateCandidateInFirestore(newCand);
               setCandidate(newCand);
+              await updateCandidateInFirestore(newCand);
             }
           }
 
@@ -245,6 +286,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAllCandidates(liveCandidates);
     });
 
+    const unsubInvitations = subscribeToJobInvitations((liveInvitations) => {
+      setJobInvitations(liveInvitations);
+    });
+
     const unsubChoices = subscribeToPlatformChoices((choices) => {
       setPlatformChoices(choices);
     });
@@ -255,6 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubJobs();
       unsubApplications();
       unsubCandidates();
+      unsubInvitations();
       unsubChoices();
     };
   }, []);
@@ -281,13 +327,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
-    if (userSession) {
-      setUserSession({ ...userSession, role: newRole });
-    }
+    // User session role is strictly governed by the database. We do not override it here.
   };
 
-  // Sign In using real Firebase Authentication
-  const login = async (email: string, password: string, targetRole: UserRole): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
+  // Sign In using real Firebase Authentication (role is detected dynamically from existing user profile)
+  const login = async (email: string, password: string, targetRole: UserRole = 'candidate'): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
@@ -305,11 +349,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (udata.name) userName = udata.name;
         if (udata.companyName) companyName = udata.companyName;
       } else {
+        // Fallback discovery: check if user exists in employers or candidates collection
+        const empDocRef = doc(db, COLLECTIONS.EMPLOYERS, user.uid);
+        const empSnap = await getDoc(empDocRef);
+        if (empSnap.exists()) {
+          assignedRole = 'employer';
+          companyName = empSnap.data()?.name;
+        } else {
+          const candDocRef = doc(db, COLLECTIONS.CANDIDATES, user.uid);
+          const candSnap = await getDoc(candDocRef);
+          if (candSnap.exists()) {
+            assignedRole = 'candidate';
+          }
+        }
+
         await setDoc(userDocRef, {
           uid: user.uid,
           email: user.email,
           role: assignedRole,
           name: userName,
+          companyName: companyName || '',
           createdAt: new Date().toISOString()
         }, { merge: true });
       }
@@ -321,7 +380,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setCandidate(candSnap.data() as CandidateProfile);
         } else {
           const newCand = createDefaultCandidateProfile(user.uid, userName, user.email || '');
-          await updateCandidateInFirestore(newCand);
           setCandidate(newCand);
         }
       }
@@ -424,8 +482,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sign In / Sign Up with a Google account. If this Google account already has a
   // user record in Firestore, that record's saved role is used (an account keeps
   // the role it was originally created with). Otherwise a new user record and a
-  // matching candidate/employer profile are created dynamically from the Google profile.
-  const loginWithGoogle = async (targetRole: UserRole): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
+  // Sign In / Sign Up with a Google account
+  const loginWithGoogle = async (targetRole: UserRole = 'candidate'): Promise<{ success: boolean; message?: string; role?: UserRole }> => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -444,6 +502,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (udata.name) userName = udata.name;
         if (udata.companyName) companyName = udata.companyName;
       } else {
+        // Fallback discovery: check if employer or candidate record already exists
+        const empDocRef = doc(db, COLLECTIONS.EMPLOYERS, user.uid);
+        const empSnap = await getDoc(empDocRef);
+        if (empSnap.exists()) {
+          assignedRole = 'employer';
+          companyName = empSnap.data()?.name;
+        } else {
+          const candDocRef = doc(db, COLLECTIONS.CANDIDATES, user.uid);
+          const candSnap = await getDoc(candDocRef);
+          if (candSnap.exists()) {
+            assignedRole = 'candidate';
+          }
+        }
+
         await setDoc(userDocRef, {
           uid: user.uid,
           email: user.email,
@@ -463,7 +535,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setCandidate(candSnap.data() as CandidateProfile);
         } else {
           const newCand = createDefaultCandidateProfile(user.uid, userName, user.email || '');
-          await updateCandidateInFirestore(newCand);
           setCandidate(newCand);
         }
       } else if (assignedRole === 'employer') {
@@ -514,6 +585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserSession(null);
     setCurrentUser(null);
     setCandidate(null);
+    setRoleState('candidate');
     showToast('Signed out successfully. Session terminated.', 'info');
   };
 
@@ -536,6 +608,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = { ...candidate, ...data };
     setCandidate(updated);
     updateCandidateInFirestore(updated);
+    if (data.name && data.name.trim()) {
+      if (userSession) {
+        setUserSession(prev => prev ? { ...prev, name: data.name!.trim() } : null);
+      }
+      setDoc(doc(db, COLLECTIONS.USERS, candidate.id), { name: data.name.trim() }, { merge: true }).catch(console.warn);
+    }
     showToast('Candidate profile updated and saved to Firebase', 'success');
   };
 
@@ -701,7 +779,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     showToast(`Published: "${newJob.title}" to Firebase!`, 'success');
-    return { success: true, message: 'Job successfully posted and live across PLM Nexus.' };
+    return { success: true, message: 'Job successfully posted and live across PLMSpider.' };
   };
 
   // 5. Apply to Job
@@ -809,6 +887,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const sendJobInvitation = (inviteData: Omit<JobInvitation, 'id' | 'sentAt' | 'status'>) => {
+    const newInvite: JobInvitation = {
+      ...inviteData,
+      id: `inv-${Date.now()}`,
+      sentAt: new Date().toISOString(),
+      status: 'pending'
+    };
+    setJobInvitations(prev => [newInvite, ...prev]);
+    saveJobInvitationToFirestore(newInvite);
+    showToast(`Job invitation sent to ${inviteData.candidateName} for position: ${inviteData.jobTitle}`, 'success');
+    return { success: true, message: 'Job invitation dispatched successfully.' };
+  };
+
+  const respondToJobInvitation = (invitationId: string, accept: boolean) => {
+    let updatedInvite: JobInvitation | undefined;
+    setJobInvitations(prev => 
+      prev.map(inv => {
+        if (inv.id !== invitationId) return inv;
+        updatedInvite = {
+          ...inv,
+          status: accept ? 'accepted' : 'declined',
+          respondedAt: new Date().toISOString()
+        };
+        return updatedInvite;
+      })
+    );
+    if (updatedInvite) {
+      saveJobInvitationToFirestore(updatedInvite);
+    }
+    const target = jobInvitations.find(i => i.id === invitationId);
+    if (accept) {
+      showToast(`Connection established! Direct contact details and verified resume are now shared with ${target?.employerName || 'the employer'}.`, 'success');
+    } else {
+      showToast(`Job invitation declined.`, 'info');
+    }
+  };
+
+  const isConnected = (candidateId: string, employerId?: string) => {
+    const empId = employerId || currentEmployer?.id || currentEmployerId || 'emp-apex';
+    return jobInvitations.some(
+      inv => inv.candidateId === candidateId && 
+             (inv.employerId === empId || !inv.employerId) && 
+             inv.status === 'accepted'
+    );
+  };
+
+  const getConnectionForCandidate = (candidateId: string, employerId?: string) => {
+    const empId = employerId || currentEmployer?.id || currentEmployerId || 'emp-apex';
+    return jobInvitations.find(
+      inv => inv.candidateId === candidateId && 
+             (inv.employerId === empId || !inv.employerId) && 
+             inv.status === 'accepted'
+    );
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -843,6 +976,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         isFirebaseConnected,
         platformChoices,
+        jobInvitations,
+        sendJobInvitation,
+        respondToJobInvitation,
+        isConnected,
+        getConnectionForCandidate,
       }}
     >
       {children}

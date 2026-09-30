@@ -1,23 +1,15 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { 
-  Briefcase, 
-  Building2, 
-  ShieldCheck, 
-  ArrowRight, 
-  CheckCircle2, 
-  Sparkles, 
-  UserCheck, 
-  ChevronRight, 
-  Compass, 
-  Users 
-} from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Compass, Cpu, ShieldCheck, Users } from 'lucide-react';
+import { ServiceTilesSection } from './ServiceTilesSection';
 
 interface LandingPageProps {
   onOpenRegisterCandidateModal: () => void;
   onOpenRegisterEmployerModal: () => void;
 }
+
+const platforms = ['Siemens Teamcenter', 'PTC Windchill', 'Dassault 3DEXPERIENCE', 'Aras Innovator', 'SAP PLM', 'Arena PLM'];
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenRegisterCandidateModal,
@@ -25,333 +17,128 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const navigate = useNavigate();
   const { userSession, jobs, employers, logout } = useApp();
+  const activeJobsCount = jobs.filter((job) => job.status === 'active').length;
+  const verifiedCompaniesCount = employers.filter((employer) => employer.verificationStatus === 'verified').length;
 
-  const activeJobsCount = jobs.filter(j => j.status === 'active').length;
-  const verifiedCompaniesCount = employers.filter(e => e.verificationStatus === 'verified').length;
+  const goToPortal = (role: 'candidate' | 'employer' | 'admin') => {
+    if (role === 'candidate') navigate('/job-seeker');
+    else if (role === 'employer') navigate('/job-provider');
+    else navigate('/admin');
+  };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
-      
-      {/* HERO SECTION */}
-      <section className="relative pt-24 pb-20 overflow-hidden border-b border-slate-100">
-        {/* Soft ambient background */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/3 w-[700px] h-[380px] bg-gradient-to-tr from-blue-100 via-indigo-50 to-transparent blur-[100px] pointer-events-none rounded-full" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-3xl mx-auto">
-            
-            {/* Pill Header Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-6 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Built for the PLM Community</span>
+    <div className="flex min-h-screen flex-col bg-white text-slate-900">
+      <section className="relative isolate overflow-hidden border-b border-slate-200 bg-slate-50">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-100/80 via-slate-50 to-white" />
+        <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1.1fr_.9fr] lg:px-8 lg:py-28">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-blue-800 shadow-sm">
+              <Cpu className="h-4 w-4" /> Purpose-built for the PLM community
             </div>
-
-            {/* Main Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.12]">
-              Where <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 bg-clip-text text-transparent">PLM Professionals</span> Connect
+            <h1 className="mt-6 max-w-3xl text-4xl font-black leading-[1.08] tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+              Your PLM expertise deserves a <span className="text-[#BA3A2C]">focused network.</span>
             </h1>
-
-            {/* Subtitle */}
-            <p className="mt-6 text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto font-normal">
-              A simple, friendly place for Teamcenter, Windchill, 3DEXPERIENCE and Aras professionals to meet the companies looking for their skills — and for companies to find the right people, faster.
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+              PLMSpider brings together product lifecycle management professionals and employers. Explore roles, present your platform experience, and connect around the skills engineering teams need.
             </p>
 
-            {/* Authenticated User Status Bar */}
             {userSession ? (
-              <div className="mt-6 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-slate-600">
-                  Signed in as <strong className="text-slate-900">{userSession.name}</strong> ({userSession.role === 'candidate' ? 'Job Seeker' : userSession.role === 'employer' ? 'Employer' : 'Admin'})
-                </span>
-                <button
-                  id="landing-hero-logout-btn"
-                  onClick={() => {
-                    logout();
-                    navigate('/');
-                  }}
-                  className="ml-2 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 transition-colors cursor-pointer border border-rose-200"
-                >
-                  Logout
-                </button>
+              <div className="mt-6 inline-flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-slate-600">Signed in as <strong className="text-slate-900">{userSession.name}</strong></span>
+                <button onClick={() => goToPortal(userSession.role)} className="font-bold text-[#BA3A2C] hover:underline">Open your workspace <ArrowRight className="ml-1 inline h-4 w-4" /></button>
+                <button onClick={() => { logout(); navigate('/'); }} className="border-l border-slate-200 pl-3 font-medium text-slate-500 hover:text-slate-900">Sign out</button>
               </div>
             ) : (
-              <div className="mt-6 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
-                <span>Already have an account?</span>
-                <button
-                  id="landing-hero-login-btn"
-                  onClick={() => navigate('/login')}
-                  className="font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer"
-                >
-                  Login here →
-                </button>
-              </div>
+              <p className="mt-5 text-sm text-slate-600">Already have an account? <button onClick={() => navigate('/login')} className="font-bold text-[#BA3A2C] hover:underline">Sign in</button></p>
             )}
 
-            {/* Primary Action Buttons */}
-            <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3.5">
-              <button
-                onClick={() => {
-                  if (userSession?.role === 'candidate') {
-                    navigate('/job-seeker');
-                  } else {
-                    navigate('/login?role=candidate&redirect=/job-seeker');
-                  }
-                }}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 group cursor-pointer"
-              >
-                <Compass className="w-4 h-4 text-blue-100" />
-                <span>Find PLM Jobs</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button onClick={() => userSession ? goToPortal(userSession.role) : onOpenRegisterCandidateModal()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#BA3A2C] px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-red-900/10 transition hover:bg-[#9E2F23]">
+                <Compass className="h-4 w-4" /> Explore PLM careers <ArrowRight className="h-4 w-4" />
               </button>
-
-              <button
-                onClick={() => {
-                  if (userSession?.role === 'employer') {
-                    navigate('/job-provider');
-                  } else {
-                    navigate('/login?role=employer&redirect=/job-provider');
-                  }
-                }}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Building2 className="w-4 h-4 text-slate-500" />
-                <span>Hire PLM Talent</span>
+              <button onClick={() => userSession ? goToPortal(userSession.role) : onOpenRegisterEmployerModal()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3.5 text-sm font-bold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50">
+                <Building2 className="h-4 w-4" /> Hire PLM talent
               </button>
             </div>
-
-            {/* Supported PLM Technologies Ribbon */}
-            <div className="mt-12 pt-8 border-t border-slate-100">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-4">
-                Popular PLM Platforms on the Network
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 text-xs font-semibold text-slate-600">
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  Siemens Teamcenter
-                </span>
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  PTC Windchill
-                </span>
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  Dassault 3DEXPERIENCE
-                </span>
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  Aras Innovator
-                </span>
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  SAP PLM
-                </span>
-                <span className="px-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-                  Active Workspace (AWC)
-                </span>
-              </div>
+            <div className="mt-10 border-t border-slate-200 pt-5">
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-[.16em] text-slate-500">PLM platforms and skills</p>
+              <div className="flex flex-wrap gap-2">{platforms.map((platform) => <span key={platform} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">{platform}</span>)}</div>
             </div>
-
           </div>
-        </div>
-      </section>
 
-      {/* METRICS & CREDIBILITY BAR */}
-      <section className="py-8 bg-slate-50 border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            <div className="p-3">
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                {activeJobsCount}
+          <div className="relative mx-auto w-full max-w-lg">
+            <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-blue-200/60 via-transparent to-emerald-200/60 blur-2xl" />
+            <div className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Users className="h-5 w-5" /></div>
+                <div><p className="text-sm font-bold text-slate-900">One specialist network</p><p className="text-xs text-slate-500">Built around PLM work</p></div>
               </div>
-              <div className="text-xs font-medium text-slate-500 mt-1">Open PLM Jobs</div>
-            </div>
-            <div className="p-3">
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                {verifiedCompaniesCount}
+              <div className="space-y-4 py-6">
+                <div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><p className="text-sm font-bold">For professionals</p><p className="mt-1 text-sm leading-6 text-slate-600">Create a profile with your platforms, modules, CAD tools, experience, and preferences.</p></div></div>
+                <div className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><p className="text-sm font-bold">For employers</p><p className="mt-1 text-sm leading-6 text-slate-600">Publish PLM roles, review relevant profiles, and manage applications and invitations.</p></div></div>
+                <div className="flex gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><p className="text-sm font-bold">Company review</p><p className="mt-1 text-sm leading-6 text-slate-600">Employer verification status is visible to support a more informed hiring experience.</p></div></div>
               </div>
-              <div className="text-xs font-medium text-slate-500 mt-1">Companies Hiring</div>
-            </div>
-            <div className="p-3">
-              <div className="text-2xl sm:text-3xl font-black text-blue-600 tracking-tight">
-                100%
+              <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-5">
+                <div className="rounded-xl bg-slate-50 p-4"><p className="text-2xl font-black text-slate-950">{activeJobsCount}</p><p className="mt-1 text-xs text-slate-500">Active PLM roles</p></div>
+                <div className="rounded-xl bg-slate-50 p-4"><p className="text-2xl font-black text-slate-950">{verifiedCompaniesCount}</p><p className="mt-1 text-xs text-slate-500">Verified employers</p></div>
               </div>
-              <div className="text-xs font-medium text-slate-500 mt-1">Focused on PLM</div>
-            </div>
-            <div className="p-3">
-              <div className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
-                Free
-              </div>
-              <div className="text-xs font-medium text-slate-500 mt-1">To Join the Network</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS: JOB SEEKERS & EMPLOYERS */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-xs font-bold text-blue-600 uppercase tracking-widest">
-              How It Works
-            </h2>
-            <p className="mt-2 text-3xl font-black text-slate-900 tracking-tight sm:text-4xl">
-              A Simple Space to Connect
-            </p>
-            <p className="mt-3 text-sm text-slate-500 leading-relaxed">
-              Whether you're looking for your next PLM role or the next great hire, everything here is built to keep it simple.
-            </p>
+      <ServiceTilesSection onOpenRegisterCandidateModal={onOpenRegisterCandidateModal} onOpenRegisterEmployerModal={onOpenRegisterEmployerModal} />
+
+      <section className="bg-slate-50 py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-bold uppercase tracking-[.16em] text-[#BA3A2C]">Six ways to take part</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">A place for every part of the PLM community</h2>
+            <p className="mt-4 text-sm leading-6 text-slate-600 sm:text-base">From individual specialists to enterprise teams, find the path that best describes you.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            
-            {/* JOB SEEKERS */}
-            <div className="bg-white rounded-2xl p-7 border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all flex flex-col justify-between group">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center mb-6 group-hover:scale-105 transition-transform">
-                  <UserCheck className="w-6 h-6" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">
-                  For Job Seekers
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                  Teamcenter, Windchill and 3DEXPERIENCE professionals can browse open roles and apply in a couple of clicks.
-                </p>
-
-                <ul className="space-y-2.5 text-sm text-slate-600 mb-6">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <span>Browse roles by PLM system and skill set</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <span>Build a simple profile that highlights your experience</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <span>Apply directly and track your applications</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => {
-                    navigate('/job-seeker');
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>Browse Jobs</span>
-                  <ChevronRight className="w-4 h-4" />
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { title: 'PLM professionals', audience: 'Job seekers and specialists', description: 'Show your experience across Teamcenter, Windchill, 3DEXPERIENCE, Aras, and related tools. Explore roles and manage applications.', role: 'candidate' as const, action: 'Join as a professional' },
+              { title: 'Employers', audience: 'Engineering and talent teams', description: 'Publish PLM openings, review profiles, and manage applications and invitations from your employer workspace.', role: 'employer' as const, action: 'Join as an employer' },
+              { title: 'Consultancies and integrators', audience: 'Project delivery teams', description: 'Use the employer workspace to describe PLM project roles and find people with relevant implementation skills.', role: 'employer' as const, action: 'Create an employer account' },
+              { title: 'Corporate training', audience: 'Trainers and learning teams', description: 'PLM trainers can present their platform and module experience in a professional profile. Employers can specify training related skills in their openings.', role: 'candidate' as const, action: 'Create a professional profile' },
+              { title: 'Freelancers and contractors', audience: 'Independent PLM specialists', description: 'Highlight your specialist skills and preferences, then explore contract opportunities listed on the network.', role: 'candidate' as const, action: 'Explore contract roles' },
+              { title: 'PLM advisory', audience: 'Architects and technical advisors', description: 'Showcase your architecture, migration, integration, or governance experience for employers seeking those capabilities.', role: 'candidate' as const, action: 'Share your expertise' },
+            ].map((tile) => (
+              <article key={tile.title} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500"><span className="h-2 w-2 rounded-full bg-[#BA3A2C]" />{tile.audience}</div>
+                <h3 className="mt-3 text-lg font-bold text-slate-950">{tile.title}</h3>
+                <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{tile.description}</p>
+                <button onClick={() => tile.role === 'candidate' ? onOpenRegisterCandidateModal() : onOpenRegisterEmployerModal()} className="mt-5 inline-flex items-center gap-2 self-start text-sm font-bold text-[#BA3A2C] hover:text-[#9E2F23]">
+                  {tile.action}<ArrowRight className="h-4 w-4" />
                 </button>
-              </div>
-            </div>
-
-            {/* EMPLOYERS */}
-            <div className="bg-white rounded-2xl p-7 border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all flex flex-col justify-between group">
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-6 group-hover:scale-105 transition-transform">
-                  <Building2 className="w-6 h-6" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">
-                  For Employers
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                  Companies looking for PLM talent can post a role and start connecting with candidates right away.
-                </p>
-
-                <ul className="space-y-2.5 text-sm text-slate-600 mb-6">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Post jobs with the PLM system and skills you need</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Review applicants in one simple dashboard</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Reach professionals who already know your systems</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => {
-                    navigate('/job-provider');
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>Post a Job</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-       {/* WHY THIS COMMUNITY */}
-      <section className="py-16 bg-slate-50 border-y border-slate-100">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-semibold mb-4">
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>Built by and for the PLM Community</span>
+      <section className="border-y border-slate-200 bg-white py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[.16em] text-[#BA3A2C]">How PLMSpider works</p><h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">A clearer path from expertise to opportunity.</h2><p className="mt-4 leading-7 text-slate-600">Keep the process centered on the details that matter in product lifecycle management.</p></div>
+          <div className="mt-10 grid gap-5 md:grid-cols-3">
+            {[
+              { n: '01', title: 'Build a relevant profile', body: 'Showcase your PLM platforms, modules, CAD tools, experience, and work preferences.' },
+              { n: '02', title: 'Find the right fit', body: 'Candidates can explore active roles. Employers can publish openings and search for relevant skills.' },
+              { n: '03', title: 'Manage the connection', body: 'Use applications, invitations, and workspace tools to keep hiring conversations organized.' },
+            ].map((step) => <article key={step.n} className="rounded-2xl border border-slate-200 bg-slate-50 p-6"><span className="text-xs font-bold tracking-widest text-[#BA3A2C]">{step.n}</span><h3 className="mt-3 text-lg font-bold text-slate-900">{step.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{step.body}</p></article>)}
           </div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-            Why PLM People Choose Us
-          </h2>
-          <p className="mt-4 text-sm text-slate-500 leading-relaxed max-w-2xl mx-auto">
-            PLM careers need more than a generic job board. This is a focused space where people who know Teamcenter, Windchill, and 3DEXPERIENCE meet the companies who need that exact expertise.
-          </p>
-
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-            <div className="p-4 rounded-xl bg-white border border-slate-200">
-              <h4 className="text-sm font-bold text-slate-900">Only PLM Roles</h4>
-              <p className="text-xs text-slate-500 mt-1">No noise from unrelated jobs — everything here is PLM-focused.</p>
-            </div>
-            <div className="p-4 rounded-xl bg-white border border-slate-200">
-              <h4 className="text-sm font-bold text-slate-900">Real Companies</h4>
-              <p className="text-xs text-slate-500 mt-1">Employers are reviewed before they can post, keeping the network genuine.</p>
-            </div>
-            <div className="p-4 rounded-xl bg-white border border-slate-200">
-              <h4 className="text-sm font-bold text-slate-900">Simple to Use</h4>
-              <p className="text-xs text-slate-500 mt-1">No clutter — just profiles, jobs, and applications.</p>
-            </div>
-          </div>
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-2"><BriefcaseBusiness className="h-4 w-4 text-blue-700"/>Permanent and contract roles</span><span className="inline-flex items-center gap-2"><Cpu className="h-4 w-4 text-blue-700"/>PLM and CAD skill profiles</span><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-blue-700"/>Employer verification workflow</span></div>
         </div>
       </section>
 
-      {/* FINAL CALL TO ACTION */}
-      <section className="py-20 text-center relative overflow-hidden bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Join the PLM Network Today
-          </h2>
-          <p className="mt-4 text-sm text-slate-500 max-w-xl mx-auto leading-relaxed">
-            Whether you're looking for your next PLM role or your next great hire, getting started takes just a minute.
-          </p>
-
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => onOpenRegisterCandidateModal()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md cursor-pointer"
-            >
-              Join as a Job Seeker
-            </button>
-            <button
-              onClick={() => onOpenRegisterEmployerModal()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 transition-all cursor-pointer"
-            >
-              Join as an Employer
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all cursor-pointer"
-            >
-              Sign In
-            </button>
-          </div>
+      <section className="bg-slate-950 py-16 text-white sm:py-20">
+        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 px-4 sm:px-6 md:flex-row md:items-center lg:px-8">
+          <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[.16em] text-red-300">Make your next move</p><h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Put PLM expertise at the center.</h2><p className="mt-4 leading-7 text-slate-300">Join as a professional to explore opportunities, or create an employer account to start building your team.</p></div>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row"><button onClick={onOpenRegisterCandidateModal} className="rounded-xl bg-[#BA3A2C] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#9E2F23]">Join as a professional</button><button onClick={onOpenRegisterEmployerModal} className="rounded-xl border border-slate-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800">Register as an employer</button><button onClick={() => navigate('/login')} className="rounded-xl px-5 py-3 text-sm font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white">Sign in</button></div>
         </div>
       </section>
-
     </div>
   );
 };

@@ -24,33 +24,28 @@ import {
 
 function AppContent() {
   const { 
-    role, 
-    setRole, 
     notificationToast, 
-    dismissToast, 
-    employers
+    dismissToast,
+    userSession
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<string>('explore');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isRegisterEmployerModalOpen, setIsRegisterEmployerModalOpen] = useState(false);
   const [isRegisterCandidateModalOpen, setIsRegisterCandidateModalOpen] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Sync role with current route
+  // Keep activeTab consistent with the active portal without render loops
   useEffect(() => {
-    if (location.pathname.startsWith('/job-seeker') && role !== 'candidate') {
-      setRole('candidate');
-      if (activeTab === 'dashboard' || activeTab === 'verification-queue') setActiveTab('explore');
-    } else if (location.pathname.startsWith('/job-provider') && role !== 'employer') {
-      setRole('employer');
-      if (activeTab === 'explore' || activeTab === 'verification-queue') setActiveTab('dashboard');
-    } else if (location.pathname.startsWith('/admin') && role !== 'admin') {
-      setRole('admin');
-      if (activeTab === 'explore' || activeTab === 'dashboard') setActiveTab('verification-queue');
+    if (location.pathname.startsWith('/job-provider')) {
+      setActiveTab(prev => (['dashboard', 'search-candidates', 'connections', 'published-jobs', 'company-profile'].includes(prev) ? prev : 'dashboard'));
+    } else if (location.pathname.startsWith('/job-seeker')) {
+      setActiveTab(prev => (['explore', 'connections', 'invitations', 'applications', 'profile'].includes(prev) ? prev : 'explore'));
+    } else if (location.pathname.startsWith('/admin')) {
+      setActiveTab(prev => (['verification-queue', 'employers-list', 'ecosystem-stats', 'platform-settings'].includes(prev) ? prev : 'verification-queue'));
     }
-  }, [location.pathname, role, setRole, activeTab]);
+  }, [location.pathname]);
 
   // Sync tab defaults when role changes and update route
   const handleRoleTabSync = (newTab: string) => {
@@ -189,13 +184,14 @@ function AppContent() {
       <footer className="border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-slate-900 text-sm">PLM Nexus</span>
+            <img src="/plmspider-logo.png" alt="PLMSpider" className="h-6 w-auto object-contain" />
+            <span className="font-bold text-slate-900 text-sm">PLMSpider</span>
             <span>·</span>
             <span>Dedicated Talent Platform for Teamcenter, Windchill, 3DEXPERIENCE & Aras</span>
           </div>
 
           <div className="flex items-center gap-6 font-medium text-slate-400">
-            <span>Enterprise Verification & Talent Governance</span>
+            <span>Connecting Professionals · Enterprise Verification & Governance</span>
           </div>
         </div>
       </footer>

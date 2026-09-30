@@ -375,7 +375,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-            As mandated by PLM Nexus governance: Whenever a Job Provider registers, their organization is held in pending status until you audit their corporate domain, tax registration, and PLM credentials before they can publish live requisitions.
+            As mandated by PLMSpider governance: Whenever a Job Provider registers, their organization is held in pending status until you audit their corporate domain, tax registration, and PLM credentials before they can publish live requisitions.
           </p>
         </div>
 

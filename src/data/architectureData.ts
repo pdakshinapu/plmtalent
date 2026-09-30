@@ -177,8 +177,8 @@ export const BACKEND_SERVICES: BackendServiceInfo[] = [
     category: 'Infrastructure',
     endpoint: '/api/v1/notifications',
     protocol: 'REST / WebSockets',
-    description: 'Multi-channel asynchronous event dispatcher orchestrating email alerts via SendGrid/AWS SES and real-time in-app toasts.',
-    features: ['SendGrid / AWS SES Mailer', 'Application Status Triggers', 'Admin Approval Alerts', 'In-App Notifications'],
+    description: 'Multi-channel asynchronous event dispatcher orchestrating direct connection events, status alerts, and real-time in-app toasts.',
+    features: ['Direct Connection Event Triggers', 'Application Status Triggers', 'Admin Approval Alerts', 'In-App Notifications'],
     accentColor: '#EC4899',
     iconName: 'Bell'
   },
@@ -379,7 +379,7 @@ export const ROADMAP_PHASES: RoadmapPhase[] = [
       'Engineering articles, technical tutorials & discussions',
       'Follow leading PLM & CAD professionals and architects',
       'Company culture, project showcases & engineering posts',
-      'Automated email dispatch (SendGrid / AWS SES)',
+      'Direct connection alerts & status dispatcher',
       'Real-time in-app activity notifications'
     ]
   },

@@ -290,7 +290,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
                 <span>Identity & Contact Details</span>
               </h3>
               <SectionVisibilityToggle
-                description="Controls whether employers can see your email, phone number, and location on your profile and applications."
+                description="Controls whether connected employers can see your phone number and location on your profile."
                 checked={visibility.contact}
                 onChange={(v) => setVisibility(prev => ({ ...prev, contact: v }))}
               />
@@ -306,7 +306,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Alex Vance"
+                  placeholder="e.g. Full Name"
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
                 />
               </div>
@@ -335,7 +335,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex.vance@example.com"
+                  placeholder="contact@domain.com"
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
                 />
               </div>
