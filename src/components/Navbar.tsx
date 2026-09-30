@@ -85,17 +85,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const handleOpenVerificationCredentials = () => {
     setIsProfileDropdownOpen(false);
     setActiveTab('company-profile');
-    if (location.pathname !== '/job-provider') {
-      navigate('/job-provider');
-    }
   };
 
   const handleOpenCandidateProfile = () => {
     setIsProfileDropdownOpen(false);
     setActiveTab('profile');
-    if (location.pathname !== '/job-seeker') {
-      navigate('/job-seeker');
-    }
   };
 
   return (
@@ -109,13 +103,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => {
                 if (userSession?.role === 'employer') {
                   setActiveTab('dashboard');
-                  navigate('/job-provider');
                 } else if (userSession?.role === 'candidate') {
                   setActiveTab('explore');
-                  navigate('/job-seeker');
                 } else if (userSession?.role === 'admin') {
                   setActiveTab('verification-queue');
-                  navigate('/admin');
                 } else {
                   navigate('/');
                 }
@@ -126,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <img 
                 src="/plmspider-logo.png" 
                 alt="PLMSpider - Connecting Professionals" 
-                className="h-10 sm:h-11 w-auto object-contain hover:scale-102 transition-transform drop-shadow-xs" 
+                className="h-7 sm:h-10 lg:h-11 w-auto object-contain hover:scale-102 transition-transform drop-shadow-xs"
               />
             </button>
           </div>
@@ -170,7 +161,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('explore');
-                        if (location.pathname !== '/job-seeker') navigate('/job-seeker');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] cursor-pointer ${
                         activeTab === 'explore' ? 'text-[#BA3A2C] font-bold' : ''
@@ -181,7 +171,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('connections');
-                        if (location.pathname !== '/job-seeker') navigate('/job-seeker');
                       }}
                       className={`relative transition-colors hover:text-[#BA3A2C] flex items-center gap-1.5 cursor-pointer ${
                         activeTab === 'connections' ? 'text-[#BA3A2C] font-bold' : ''
@@ -198,7 +187,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('invitations');
-                        if (location.pathname !== '/job-seeker') navigate('/job-seeker');
                       }}
                       className={`relative transition-colors hover:text-[#BA3A2C] flex items-center gap-1.5 cursor-pointer ${
                         activeTab === 'invitations' || activeTab === 'invites' || activeTab === 'matches' ? 'text-[#BA3A2C] font-bold' : ''
@@ -215,7 +203,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('applications');
-                        if (location.pathname !== '/job-seeker') navigate('/job-seeker');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] cursor-pointer ${
                         activeTab === 'applications' ? 'text-[#BA3A2C] font-bold' : ''
@@ -226,7 +213,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('profile');
-                        if (location.pathname !== '/job-seeker') navigate('/job-seeker');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] flex items-center gap-1 cursor-pointer ${
                         activeTab === 'profile' ? 'text-[#BA3A2C] font-bold' : ''
@@ -243,7 +229,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('dashboard');
-                        if (location.pathname !== '/job-provider') navigate('/job-provider');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] cursor-pointer ${
                         activeTab === 'dashboard' ? 'text-[#BA3A2C] font-bold' : ''
@@ -254,7 +239,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('search-candidates');
-                        if (location.pathname !== '/job-provider') navigate('/job-provider');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] cursor-pointer ${
                         activeTab === 'search-candidates' ? 'text-[#BA3A2C] font-bold' : ''
@@ -265,7 +249,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('connections');
-                        if (location.pathname !== '/job-provider') navigate('/job-provider');
                       }}
                       className={`relative transition-colors hover:text-[#BA3A2C] flex items-center gap-1.5 cursor-pointer ${
                         activeTab === 'connections' || activeTab === 'matches' ? 'text-[#BA3A2C] font-bold' : ''
@@ -282,7 +265,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setActiveTab('published-jobs');
-                        if (location.pathname !== '/job-provider') navigate('/job-provider');
                       }}
                       className={`transition-colors hover:text-[#BA3A2C] cursor-pointer ${
                         activeTab === 'published-jobs' || activeTab === 'pipeline' || activeTab === 'post-job' ? 'text-[#BA3A2C] font-bold' : ''
@@ -298,7 +280,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={() => {
                     setActiveTab('verification-queue');
-                    if (location.pathname !== '/admin') navigate('/admin');
                   }}
                   className={`relative transition-colors hover:text-slate-900 flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'verification-queue' ? 'text-slate-950 font-semibold' : ''
@@ -314,7 +295,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={() => {
                     setActiveTab('employers-list');
-                    if (location.pathname !== '/admin') navigate('/admin');
                   }}
                   className={`transition-colors hover:text-slate-900 cursor-pointer ${
                     activeTab === 'employers-list' ? 'text-slate-950 font-semibold' : ''
@@ -325,7 +305,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={() => {
                     setActiveTab('ecosystem-stats');
-                    if (location.pathname !== '/admin') navigate('/admin');
                   }}
                   className={`transition-colors hover:text-slate-900 cursor-pointer ${
                     activeTab === 'ecosystem-stats' ? 'text-slate-950 font-semibold' : ''
@@ -336,7 +315,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   onClick={() => {
                     setActiveTab('platform-settings');
-                    if (location.pathname !== '/admin') navigate('/admin');
                   }}
                   className={`transition-colors hover:text-slate-900 cursor-pointer ${
                     activeTab === 'platform-settings' ? 'text-slate-950 font-semibold' : ''
@@ -349,6 +327,45 @@ export const Navbar: React.FC<NavbarProps> = ({
           </>
         )}
       </nav>
+
+          <div className="min-w-0 flex-1 px-2 lg:hidden">
+            <select
+              aria-label="Navigate to a page"
+              value={isAuthPage ? 'overview' : !userSession ? (isLandingPage ? 'overview' : 'overview') : activeTab}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === 'overview') navigate('/');
+                else if (value.startsWith('candidate:')) navigate('/login?role=candidate&redirect=/job-seeker');
+                else if (value.startsWith('employer:')) navigate('/login?role=employer&redirect=/job-provider');
+                else if (value.startsWith('path:')) navigate(value.slice(5));
+                else setActiveTab(value);
+              }}
+              className="w-full max-w-48 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#BA3A2C]"
+            >
+              <option value="overview">{isAuthPage ? 'Platform overview' : 'Overview'}</option>
+              {!userSession ? <>
+                <option value="candidate:jobs">Find PLM jobs</option>
+                <option value="employer:talent">Hire PLM talent</option>
+              </> : userSession.role === 'candidate' ? <>
+                <option value="explore">Explore PLM jobs</option>
+                <option value="connections">Direct connections</option>
+                <option value="invitations">Job invitations</option>
+                <option value="applications">My applications</option>
+                <option value="profile">My profile</option>
+              </> : userSession.role === 'employer' ? <>
+                <option value="dashboard">Enterprise overview</option>
+                <option value="search-candidates">Search job seekers</option>
+                <option value="connections">Direct connections</option>
+                <option value="published-jobs">Published jobs</option>
+                <option value="company-profile">Company profile</option>
+              </> : <>
+                <option value="verification-queue">Verification queue</option>
+                <option value="employers-list">All enterprises</option>
+                <option value="ecosystem-stats">PLM market analytics</option>
+                <option value="platform-settings">Platform settings</option>
+              </>}
+            </select>
+          </div>
 
           {/* ZONE 3: Auth & Identity Actions */}
           <div className="flex items-center gap-3">
@@ -487,9 +504,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onClick={() => {
                               setIsProfileDropdownOpen(false);
                               setActiveTab('connections');
-                              if (location.pathname !== '/job-provider') {
-                                navigate('/job-provider');
-                              }
                             }}
                             className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-between transition-colors shadow-2xs cursor-pointer"
                           >
@@ -530,9 +544,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onClick={() => {
                               setIsProfileDropdownOpen(false);
                               setActiveTab('connections');
-                              if (location.pathname !== '/job-seeker') {
-                                navigate('/job-seeker');
-                              }
                             }}
                             className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-between transition-colors shadow-2xs cursor-pointer"
                           >
@@ -547,9 +558,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                             onClick={() => {
                               setIsProfileDropdownOpen(false);
                               setActiveTab('invitations');
-                              if (location.pathname !== '/job-seeker') {
-                                navigate('/job-seeker');
-                              }
                             }}
                             className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl flex items-center justify-between transition-colors shadow-2xs cursor-pointer"
                           >

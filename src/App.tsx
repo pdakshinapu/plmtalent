@@ -26,7 +26,8 @@ function AppContent() {
   const { 
     notificationToast, 
     dismissToast,
-    userSession
+    userSession,
+    setRole
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -36,28 +37,63 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Keep activeTab consistent with the active portal without render loops
-  useEffect(() => {
-    if (location.pathname.startsWith('/job-provider')) {
-      setActiveTab(prev => (['dashboard', 'search-candidates', 'connections', 'published-jobs', 'company-profile'].includes(prev) ? prev : 'dashboard'));
-    } else if (location.pathname.startsWith('/job-seeker')) {
-      setActiveTab(prev => (['explore', 'connections', 'invitations', 'applications', 'profile'].includes(prev) ? prev : 'explore'));
-    } else if (location.pathname.startsWith('/admin')) {
-      setActiveTab(prev => (['verification-queue', 'employers-list', 'ecosystem-stats', 'platform-settings'].includes(prev) ? prev : 'verification-queue'));
+  const routeTab = (pathname: string) => {
+    const segments = pathname.split('/').filter(Boolean);
+    const portal = segments[0];
+    const tab = segments[1];
+    if (portal === 'job-seeker') return tab || 'explore';
+    if (portal === 'job-provider') {
+      const tabs: Record<string, string> = { overview: 'dashboard', candidates: 'search-candidates', connections: 'connections', jobs: 'published-jobs', 'post-job': 'post-job', pipeline: 'pipeline', 'company-profile': 'company-profile' };
+      return tabs[tab] || tab || 'dashboard';
     }
+    if (portal === 'admin') {
+      const tabs: Record<string, string> = { 'verification-queue': 'verification-queue', employers: 'employers-list', analytics: 'ecosystem-stats', settings: 'platform-settings' };
+      return tabs[tab] || tab || 'verification-queue';
+    }
+    return null;
+  };
+
+  const portalPath = (portalRole: string, tab: string) => {
+    const paths: Record<string, Record<string, string>> = {
+      candidate: {
+        explore: 'explore', connections: 'connections', invitations: 'invitations',
+        invites: 'invitations', matches: 'invitations', applications: 'applications',
+        profile: 'profile', directory: 'directory',
+      },
+      employer: {
+        dashboard: 'overview', 'search-candidates': 'candidates', connections: 'connections',
+        matches: 'connections', 'published-jobs': 'jobs', 'post-job': 'post-job',
+        pipeline: 'pipeline', 'company-profile': 'company-profile',
+      },
+      admin: {
+        'verification-queue': 'verification-queue', 'employers-list': 'employers',
+        'ecosystem-stats': 'analytics', 'platform-settings': 'settings',
+      },
+    };
+    const root = portalRole === 'candidate' ? '/job-seeker' : portalRole === 'employer' ? '/job-provider' : '/admin';
+    return `${root}/${paths[portalRole]?.[tab] || tab}`;
+  };
+
+  // Keep the selected workspace view in sync with the URL, including back/forward navigation.
+  useEffect(() => {
+    const tab = routeTab(location.pathname);
+    if (tab) setActiveTab(tab);
   }, [location.pathname]);
 
-  // Sync tab defaults when role changes and update route
+  // All workspace navigation updates the URL so views can be linked and restored.
   const handleRoleTabSync = (newTab: string) => {
     setActiveTab(newTab);
+    const pathRole = location.pathname.startsWith('/job-provider') ? 'employer'
+      : location.pathname.startsWith('/admin') ? 'admin'
+      : location.pathname.startsWith('/job-seeker') ? 'candidate'
+      : userSession?.role;
+    if (pathRole) navigate(portalPath(pathRole, newTab));
   };
 
   const handleRoleSwitch = (newRole: string, defaultTab: string) => {
-    setRole(newRole as any);
+    setRole(newRole as 'candidate' | 'employer' | 'admin');
     setActiveTab(defaultTab);
-    if (newRole === 'candidate') navigate('/job-seeker');
-    if (newRole === 'employer') navigate('/job-provider');
-    if (newRole === 'admin') navigate('/admin');
+    navigate(portalPath(newRole, defaultTab));
   };
 
   return (
