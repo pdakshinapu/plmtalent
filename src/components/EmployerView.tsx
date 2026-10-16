@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { PLMSystem, PLMModule, CADTool, ClearanceLevel, Application, CandidateProfile } from '../types';
+import { PLMSystem, PLMModule, CADTool, ComplianceLevel, Application, CandidateProfile } from '../types';
 import { 
   Building2, 
   CheckCircle2, 
@@ -32,13 +32,21 @@ import {
   Layers,
   Shield,
   Boxes,
-  DollarSign
+  DollarSign,
+  Edit3,
+  Globe,
+  Linkedin,
+  Calendar,
+  Cpu
 } from 'lucide-react';
 import { AddCustomOptionButton } from './AddCustomOptionButton';
 import { CurrencySelector } from './CurrencySelector';
 import { formatCompensation, getCurrencySymbol } from '../utils/currency';
 import { CandidateSimpleListView } from './CandidateSimpleListView';
+import { downloadResumeFile } from '../services/cloudinaryService';
+import { DocumentViewerModal } from './DocumentViewerModal';
 import { EmployerConnectionsView } from './EmployerConnectionsView';
+import { EditEmployerModal } from './EditEmployerModal';
 
 interface EmployerViewProps {
   activeTab: string;
@@ -112,23 +120,25 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
   const [minComp, setMinComp] = useState<number | ''>('');
   const [maxComp, setMaxComp] = useState<number | ''>('');
   const [compPeriod, setCompPeriod] = useState<'yearly' | 'hourly'>('yearly');
-  const [itarRequired, setItarRequired] = useState(false);
+  const [complianceCertRequired, setComplianceCertRequired] = useState(false);
   const [summary, setSummary] = useState('');
   const [responsibilities, setResponsibilities] = useState('');
   const [requirements, setRequirements] = useState('');
 
   // ATS selected application modal
   const [inspectedApp, setInspectedApp] = useState<Application | null>(null);
+  const [viewingResume, setViewingResume] = useState<{ url: string; filename?: string } | null>(null);
 
   // Candidate search / talent browsing state
   const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateFilterPLM, setCandidateFilterPLM] = useState<PLMSystem | 'All'>('All');
-  const [candidateFilterClearance, setCandidateFilterClearance] = useState<ClearanceLevel | 'All'>('All');
+  const [candidateFilterCompliance, setCandidateFilterCompliance] = useState<ComplianceLevel | 'All'>('All');
   const [candidateFilterMinExp, setCandidateFilterMinExp] = useState<number>(0);
   const [inspectedCandidate, setInspectedCandidate] = useState<CandidateProfile | null>(null);
 
   // Unified Published Jobs & ATS view state
   const [isCreatingJob, setIsCreatingJob] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [selectedJobIdForAts, setSelectedJobIdForAts] = useState<string | 'all'>('all');
   const [publishedJobsViewMode, setPublishedJobsViewMode] = useState<'jobs' | 'ats'>('jobs');
   const [expandedJobIdForProfiles, setExpandedJobIdForProfiles] = useState<string | null>(null);
@@ -205,7 +215,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
       modules: defaultModules,
       cadTools: defaultCAD,
       certifications: defaultCerts,
-      clearance: 'None',
+      complianceLevel: 'None',
       currentCompany: 'Enterprise Engineering',
       currentRole: 'PLM Engineer',
       expectedCompensation: '$140,000 / yr',
@@ -300,7 +310,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                   </span>
                   <span className="flex items-center gap-1 font-medium text-amber-300">
                     <Shield className="w-3.5 h-3.5" />
-                    {inspectedCandidate.clearance || 'Commercial'}
+                    {inspectedCandidate.complianceLevel || 'Standard'}
                   </span>
                   {inspectedCandidate.location && (
                     <span className="flex items-center gap-1 font-medium text-slate-300">
@@ -349,7 +359,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                 </span>
                 <span className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                  Clearance: {inspectedCandidate.clearance || 'Commercial'}
+                  Compliance: {inspectedCandidate.complianceLevel || 'Standard'}
                 </span>
               </div>
             </div>
@@ -542,17 +552,34 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                     <span className="text-[10px] text-blue-600 font-medium">Verified PDF Resume</span>
                   </div>
                 </div>
-                <a
-                  href={`#resume-${inspectedCandidate.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert(`Viewing verified resume document: ${inspectedCandidate.resumeFileName || 'Resume.pdf'}`);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Resume</span>
-                </a>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {inspectedCandidate.resumeUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setViewingResume({ url: inspectedCandidate.resumeUrl!, filename: inspectedCandidate.resumeFileName || 'Resume.pdf' })}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-[11px] font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                      title="View candidate verified resume"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>View</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (inspectedCandidate.resumeUrl) {
+                        downloadResumeFile(inspectedCandidate.resumeUrl, inspectedCandidate.resumeFileName || 'Resume.pdf');
+                      } else {
+                        alert(`Viewing verified resume document: ${inspectedCandidate.resumeFileName || 'Resume.pdf'}`);
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                    title="Download candidate verified resume"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -638,8 +665,8 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
         currency: 'USD',
         period: compPeriod,
       },
-      itarRequired,
-      clearanceRequired: itarRequired ? 'ITAR / Export Controlled' : 'None',
+      complianceCertRequired,
+      complianceLevelRequired: complianceCertRequired ? 'Industry Certified' : 'None',
       summary: summary.trim(),
       responsibilities: responsibilities.split('\n').map(r => r.trim()).filter(r => r.length > 0),
       requirements: requirements.split('\n').map(r => r.trim()).filter(r => r.length > 0),
@@ -725,7 +752,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
-                Position Title *
+                Position Title <span className="text-[#BA3A2C] font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -740,7 +767,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Primary PLM Platform *
+                  Primary PLM Platform <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <select
                   value={primaryPLM}
@@ -816,7 +843,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
             </div>
           </div>
 
-          {/* Compensation & Clearance */}
+          {/* Compensation & Compliance */}
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
               2. Compensation & Compliance Requirements
@@ -867,16 +894,16 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
             <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between">
               <div>
                 <div className="text-xs font-semibold text-slate-900">
-                  ITAR / Defense Export Control Required
+                  Industry Compliance Certification Required
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Requires candidates to possess verified U.S. person / export clearance status.
+                  Requires candidates to possess verified industry compliance certification status.
                 </div>
               </div>
               <input
                 type="checkbox"
-                checked={itarRequired}
-                onChange={e => setItarRequired(e.target.checked)}
+                checked={complianceCertRequired}
+                onChange={e => setComplianceCertRequired(e.target.checked)}
                 className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900"
               />
             </div>
@@ -1203,16 +1230,16 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Quick CAD / Clearance Badges */}
+                        {/* Quick CAD / Compliance Badges */}
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           {job.cadIntegration?.slice(0, 2).map(cad => (
                             <span key={cad} className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium">
                               {cad}
                             </span>
                           ))}
-                          {job.itarRequired && (
+                          {job.complianceCertRequired && (
                             <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              ITAR
+                              Certified
                             </span>
                           )}
                         </div>
@@ -1555,9 +1582,9 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                                           <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold font-mono">
                                             {cand.yearsOfExperience} yrs exp
                                           </span>
-                                          {cand.clearance && cand.clearance !== 'None' && (
+                                          {cand.complianceLevel && cand.complianceLevel !== 'None' && (
                                             <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
-                                              {cand.clearance}
+                                              {cand.complianceLevel}
                                             </span>
                                           )}
                                         </div>
@@ -1594,9 +1621,32 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                                                 {app.resumeFileName || cand.resumeFileName}
                                               </span>
                                             </div>
-                                            <span className="text-[10px] text-blue-700 font-mono font-semibold bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
-                                              Resume PDF
-                                            </span>
+                                            {(app.resumeUrl || cand.resumeUrl) ? (
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setViewingResume({ url: app.resumeUrl || cand.resumeUrl!, filename: app.resumeFileName || cand.resumeFileName || 'Resume.pdf' })}
+                                                  className="text-[10px] text-blue-700 hover:text-blue-900 hover:bg-blue-100 font-semibold bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+                                                  title="View Resume Document"
+                                                >
+                                                  <ExternalLink className="w-2.5 h-2.5" />
+                                                  <span>View</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => downloadResumeFile(app.resumeUrl || cand.resumeUrl!, app.resumeFileName || cand.resumeFileName || 'Resume.pdf')}
+                                                  className="text-[10px] text-emerald-800 hover:text-emerald-950 hover:bg-emerald-100 font-semibold bg-white px-2 py-0.5 rounded border border-emerald-200 shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+                                                  title="Download Resume"
+                                                >
+                                                  <Download className="w-2.5 h-2.5" />
+                                                  <span>Download</span>
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <span className="text-[10px] text-blue-700 font-mono font-semibold bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                                                Resume PDF
+                                              </span>
+                                            )}
                                           </div>
                                         )}
 
@@ -1882,9 +1932,9 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                               <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold font-mono">
                                 {cand.yearsOfExperience} yrs
                               </span>
-                              {cand.clearance && cand.clearance !== 'None' && (
+                              {cand.complianceLevel && cand.complianceLevel !== 'None' && (
                                 <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
-                                  {cand.clearance}
+                                  {cand.complianceLevel}
                                 </span>
                               )}
                             </div>
@@ -1916,9 +1966,32 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                                     {app.resumeFileName || cand.resumeFileName}
                                   </span>
                                 </div>
-                                <span className="text-[10px] text-blue-700 font-mono font-semibold bg-white px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
-                                  PDF
-                                </span>
+                                {(app.resumeUrl || cand.resumeUrl) ? (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingResume({ url: app.resumeUrl || cand.resumeUrl!, filename: app.resumeFileName || cand.resumeFileName || 'Resume.pdf' })}
+                                      className="text-[10px] text-blue-700 hover:text-blue-900 hover:bg-blue-100 font-semibold bg-white px-1.5 py-0.5 rounded border border-blue-200 shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="View Document"
+                                    >
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                      <span>View</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadResumeFile(app.resumeUrl || cand.resumeUrl!, app.resumeFileName || cand.resumeFileName || 'Resume.pdf')}
+                                      className="text-[10px] text-emerald-800 hover:text-emerald-950 hover:bg-emerald-100 font-semibold bg-white px-1.5 py-0.5 rounded border border-emerald-200 shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="Download Document"
+                                    >
+                                      <Download className="w-2.5 h-2.5" />
+                                      <span>Download</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-blue-700 font-mono font-semibold bg-white px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                                    PDF
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2063,108 +2136,471 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
   // Sub-view: Company Profile & Verification Credentials
   if (activeTab === 'company-profile') {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        {/* Top Header with Edit Profile Action */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">
-              Corporate Verification & PLM Stack Credentials
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              Corporate Profile & Recruiter Credentials
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Legitimacy credentials audited by the Main Admin before platform activation
+              Comprehensive organization profile, hiring leadership, and PLM Spider governance credentials
             </p>
           </div>
+
+          <button
+            id="edit-company-profile-btn"
+            onClick={() => setIsEditProfileModalOpen(true)}
+            className="px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer hover:shadow-md shrink-0 self-start sm:self-auto"
+          >
+            <Edit3 className="w-4 h-4" />
+            <span>Edit Company Profile</span>
+          </button>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
-          
-          {/* Status Header */}
-          <div className="flex items-center justify-between p-4 rounded-xl border bg-slate-50">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl text-white font-bold flex items-center justify-center ${currentEmployer.logoBg}`}>
-                {currentEmployer.logoInitials}
+        {/* Verification Status Banner */}
+        {isVerified && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-700 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">{currentEmployer.companyName}</h2>
-                <div className="text-xs text-slate-500 font-mono">{currentEmployer.legalEntity}</div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-emerald-900">
+                    Verified Enterprise (Authenticated by Platform Admin)
+                  </h3>
+                  <span className="text-[10px] font-mono bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded font-semibold uppercase">
+                    Active & Verified
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-800 mt-0.5">
+                  Corporate domain and statutory tax credentials verified. Authenticated for job seeker searches, direct connection invites, and requisition publishing.
+                </p>
               </div>
             </div>
-
-            <div>
-              {isVerified && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Verified Enterprise (Approved by Admin)
-                </span>
-              )}
-              {isPending && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  Pending Main Admin Verification
-                </span>
-              )}
-              {isRejected && (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
-                  <AlertTriangle className="w-4 h-4 text-rose-600" />
-                  Verification Rejected
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Audit Data Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="p-3.5 rounded-lg border border-slate-200 space-y-1">
-              <span className="text-slate-400 font-medium block">Corporate Domain</span>
-              <span className="font-mono font-semibold text-slate-900">{currentEmployer.corporateDomain}</span>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-slate-200 space-y-1">
-              <span className="text-slate-400 font-medium block">Tax Registration / EIN</span>
-              <span className="font-mono font-semibold text-slate-900">{currentEmployer.taxRegistrationNumber}</span>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-slate-200 space-y-1">
-              <span className="text-slate-400 font-medium block">Representative Lead</span>
-              <span className="font-semibold text-slate-900">{currentEmployer.contactPerson} ({currentEmployer.contactTitle})</span>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-slate-200 space-y-1">
-              <span className="text-slate-400 font-medium block">Official Contact Email</span>
-              <span className="font-mono font-semibold text-slate-900">{currentEmployer.contactEmail}</span>
-            </div>
-          </div>
-
-          {/* PLM Tech Stack */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Declared PLM Environment
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {currentEmployer.primaryPLMStack.map(sys => (
-                <span key={sys} className="px-3 py-1 rounded-lg bg-slate-900 text-white text-xs font-medium">
-                  {sys}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Attached Document */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Submitted Verification Document
-            </h3>
-            <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600" />
-                <span className="font-mono text-slate-800">{currentEmployer.verificationDocName}</span>
-              </div>
-              <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Audited by Admin
+            {currentEmployer.verifiedAt && (
+              <span className="text-[11px] font-mono text-emerald-700 shrink-0">
+                Verified: {new Date(currentEmployer.verifiedAt).toLocaleDateString()}
               </span>
+            )}
+          </div>
+        )}
+
+        {isPending && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-800 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-amber-900">
+                    Pending Main Admin Authentication & Review
+                  </h3>
+                  <span className="text-[10px] font-mono bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded font-semibold uppercase">
+                    In Review
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Your corporate details and tax/business registration credentials are under review by the platform administrator. Once verified, your enterprise verified badge will be activated.
+                </p>
+              </div>
             </div>
+
+            <button
+              onClick={() => setIsEditProfileModalOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-semibold text-amber-900 bg-amber-200/70 hover:bg-amber-200 rounded-lg transition-colors shrink-0 cursor-pointer"
+            >
+              Update Credentials
+            </button>
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center shrink-0 text-rose-700 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-rose-900">
+                    Verification Revision Requested by Main Admin
+                  </h3>
+                  <span className="text-[10px] font-mono bg-rose-200/80 text-rose-900 px-2 py-0.5 rounded font-semibold uppercase">
+                    Action Needed
+                  </span>
+                </div>
+                <p className="text-xs text-rose-800 mt-0.5">
+                  <strong>Admin Feedback:</strong> {currentEmployer.rejectionReason || 'Please verify your corporate tax ID and upload an official business incorporation certificate.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsEditProfileModalOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors shrink-0 cursor-pointer shadow-2xs"
+            >
+              Edit & Re-submit
+            </button>
+          </div>
+        )}
+
+        {/* Corporate Identity Hero Card */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className={`w-16 h-16 rounded-2xl text-white font-bold text-xl flex items-center justify-center shadow-md shrink-0 ${currentEmployer.logoBg}`}>
+                {currentEmployer.logoInitials}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {currentEmployer.companyName}
+                  </h2>
+                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    {currentEmployer.legalEntity || currentEmployer.companyName}
+                  </span>
+                </div>
+                
+                <p className="text-xs text-slate-600 font-medium">
+                  {currentEmployer.tagline || 'Leading Engineering & Digital Transformation Organization'}
+                </p>
+
+                {/* Metadata Pills */}
+                <div className="flex items-center gap-3 pt-2 text-xs text-slate-600 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg font-medium">
+                    <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{currentEmployer.companyType || 'Corporate / Enterprise'}</span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg font-medium">
+                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{currentEmployer.industry}</span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg font-medium">
+                    <Users className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{currentEmployer.companySize}</span>
+                  </span>
+
+                  {currentEmployer.yearFounded && (
+                    <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Est. {currentEmployer.yearFounded}</span>
+                    </span>
+                  )}
+
+                  {currentEmployer.headquarters && (
+                    <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-rose-600" />
+                      <span>{currentEmployer.headquarters}</span>
+                    </span>
+                  )}
+
+                  {currentEmployer.website && (
+                    <a
+                      href={currentEmployer.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 hover:text-blue-900 px-2.5 py-1 rounded-lg font-medium transition-colors"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>{currentEmployer.website.replace(/^https?:\/\//, '')}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsEditProfileModalOpen(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 self-start cursor-pointer hover:underline"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Details</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Detailed 2-Column Information Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          
+          {/* Left Column (2 Cols): Company Info, Locations & PLM Stack */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* About Company Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-blue-600" />
+                  <span>About the Company</span>
+                </h3>
+                <button
+                  onClick={() => setIsEditProfileModalOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              {currentEmployer.about ? (
+                <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+                  {currentEmployer.about}
+                </p>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center">
+                  <p className="text-xs text-slate-500">
+                    No corporate overview provided yet.
+                  </p>
+                  <button
+                    onClick={() => setIsEditProfileModalOpen(true)}
+                    className="mt-2 text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    + Add Company Overview & Culture
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Office Locations & Facilities */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-rose-600" />
+                  <span>Office Locations & Infrastructure</span>
+                </h3>
+                <button
+                  onClick={() => setIsEditProfileModalOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Corporate Headquarters</span>
+                  <span className="font-semibold text-slate-900 block">
+                    {currentEmployer.headquarters || 'Not declared yet'}
+                  </span>
+                  {currentEmployer.address && (
+                    <span className="text-slate-500 block text-[11px] mt-1">
+                      {currentEmployer.address}
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                  <span className="text-slate-400 font-medium block">Global Branches & Delivery Centers</span>
+                  {currentEmployer.operatingLocations && currentEmployer.operatingLocations.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {currentEmployer.operatingLocations.map(loc => (
+                        <span key={loc} className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[11px] font-medium text-slate-700">
+                          {loc}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic text-[11px] block">No secondary branch offices added.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* PLM Tech Stack & CAD Environment */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-indigo-600" />
+                  <span>Declared PLM Environment & Engineering Stack</span>
+                </h3>
+                <button
+                  onClick={() => setIsEditProfileModalOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              {/* Primary PLMs */}
+              <div>
+                <span className="text-[11px] text-slate-400 font-medium block mb-2">Primary PLM Systems</span>
+                <div className="flex flex-wrap gap-2">
+                  {currentEmployer.primaryPLMStack && currentEmployer.primaryPLMStack.length > 0 ? (
+                    currentEmployer.primaryPLMStack.map(sys => (
+                      <span key={sys} className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-medium shadow-2xs">
+                        {sys}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No primary PLM systems selected yet.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Integrated CAD Tools */}
+              <div>
+                <span className="text-[11px] text-slate-400 font-medium block mb-2">Supported CAD / Engineering Tools</span>
+                <div className="flex flex-wrap gap-2">
+                  {currentEmployer.cadEnvironments && currentEmployer.cadEnvironments.length > 0 ? (
+                    currentEmployer.cadEnvironments.map(tool => (
+                      <span key={tool} className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-medium">
+                        {tool}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No CAD tools declared.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Dedicated Team Scale */}
+              {currentEmployer.plmTeamSize && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">PLM Practice Team Scale:</span>
+                  <span className="font-semibold text-slate-800">{currentEmployer.plmTeamSize}</span>
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Right Column (1 Col): Recruiter Details & Admin Verification KYC */}
+          <div className="space-y-6">
+            
+            {/* Recruiter & Contact Leadership Card (Naukri Recruiter Profile) */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-blue-600" />
+                  <span>Hiring Recruiter Leadership</span>
+                </h3>
+                <button
+                  onClick={() => setIsEditProfileModalOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Lead Contact</span>
+                  <span className="font-bold text-slate-900 block text-sm">
+                    {currentEmployer.contactPerson || 'Not provided'}
+                  </span>
+                  <span className="text-slate-500 block text-xs">
+                    {currentEmployer.contactTitle || 'Hiring Manager / Talent Lead'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Official Work Email</span>
+                  <div className="flex items-center gap-1.5 font-mono text-slate-900">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{currentEmployer.contactEmail}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Contact Phone</span>
+                  <div className="flex items-center gap-1.5 font-mono text-slate-900">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>{currentEmployer.contactPhone || 'Not provided'}</span>
+                  </div>
+                </div>
+
+                {currentEmployer.linkedInUrl && (
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                    <span className="text-slate-400 font-medium block">Recruiter Profile</span>
+                    <a
+                      href={currentEmployer.linkedInUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-blue-600 hover:underline font-medium"
+                    >
+                      <Linkedin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>LinkedIn Profile</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Corporate Verification & Compliance Proof (Admin KYC) */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Statutory Verification (Admin KYC)</span>
+                </h3>
+                <button
+                  onClick={() => setIsEditProfileModalOpen(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Corporate Domain</span>
+                  <span className="font-mono font-semibold text-slate-900 block">
+                    {currentEmployer.corporateDomain || 'Not declared'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
+                  <span className="text-slate-400 font-medium block">Tax Registration / EIN / GSTIN</span>
+                  <span className="font-mono font-semibold text-slate-900 block">
+                    {currentEmployer.taxRegistrationNumber || 'Not submitted yet'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                  <span className="text-slate-400 font-medium block">Attached Verification Document</span>
+                  {currentEmployer.verificationDocName ? (
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="font-mono text-slate-800 text-[11px] truncate">
+                          {currentEmployer.verificationDocName}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                        Verified
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 space-y-1">
+                      <span>No document attached yet.</span>
+                      <button
+                        onClick={() => setIsEditProfileModalOpen(true)}
+                        className="block text-blue-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        + Attach Certificate of Incorporation / Tax License
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
           </div>
 
         </div>
+
+        {/* Edit Employer Modal */}
+        <EditEmployerModal
+          isOpen={isEditProfileModalOpen}
+          onClose={() => setIsEditProfileModalOpen(false)}
+        />
+
       </div>
     );
   }
@@ -2212,9 +2648,25 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-800 mt-1 max-w-2xl leading-relaxed">
-                Your verification request for {currentEmployer.companyName} is queued for Main Admin audit. Once the Admin audits your legal credentials, your positions will immediately unlock for verified PLM candidates.
+                Your verification request for {currentEmployer.companyName} is queued for Main Admin review. Once the Admin reviews your legal credentials, your positions will immediately unlock for verified PLM candidates.
               </p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            <button
+              onClick={() => setIsEditProfileModalOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-white bg-amber-800 hover:bg-amber-900 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Profile</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('company-profile')}
+              className="px-3.5 py-2 text-xs font-semibold text-amber-900 bg-amber-200/80 hover:bg-amber-200 rounded-xl transition-colors cursor-pointer"
+            >
+              View Profile →
+            </button>
           </div>
         </div>
       ) : (
@@ -2222,7 +2674,7 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
             <div className="text-xs text-emerald-900">
-              <strong className="font-semibold">Verified PLM Enterprise:</strong> Your organization has passed corporate domain and tax registration audit. Active positions are broadcasted to certified Teamcenter, Windchill, and 3DEXPERIENCE engineers.
+              <strong className="font-semibold">Verified PLM Enterprise:</strong> Your organization has passed corporate domain and tax registration review. Active positions are broadcasted to certified Teamcenter, Windchill, and 3DEXPERIENCE engineers.
             </div>
           </div>
           <span className="text-[11px] font-mono text-emerald-800 font-semibold hidden sm:inline">
@@ -2373,6 +2825,19 @@ export const EmployerView: React.FC<EmployerViewProps> = ({
           </div>
         )}
       </div>
+
+      <EditEmployerModal
+        isOpen={isEditProfileModalOpen}
+        onClose={() => setIsEditProfileModalOpen(false)}
+      />
+
+      {/* In-app Document Viewer Modal */}
+      <DocumentViewerModal
+        isOpen={Boolean(viewingResume)}
+        onClose={() => setViewingResume(null)}
+        url={viewingResume?.url || ''}
+        filename={viewingResume?.filename || 'Resume_Document.pdf'}
+      />
 
     </div>
   );

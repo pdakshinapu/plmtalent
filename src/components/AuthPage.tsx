@@ -280,9 +280,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
           {/* Error Message Alert */}
           {errorMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1.5">
+                <p className="leading-relaxed">{errorMsg}</p>
+                {authMode === 'signin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('signup');
+                      setErrorMsg(null);
+                    }}
+                    className="inline-flex items-center text-xs font-bold text-[#BA3A2C] hover:underline cursor-pointer"
+                  >
+                    → Click here to create a new account with this email
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -293,7 +307,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             {authMode === 'signup' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name / Contact Name
+                  Full Name / Contact Name <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <div className="relative">
                   <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -313,7 +327,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             {authMode === 'signup' && selectedRole === 'employer' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Company / Organization Name
+                  Company / Organization Name <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -332,7 +346,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             {/* Email Address */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Email Address
+                Email Address <span className="text-[#BA3A2C] font-bold">*</span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -351,7 +365,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-slate-700">
-                  Password
+                  Password <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <span className="text-[11px] text-slate-400">Min 6 characters</span>
               </div>

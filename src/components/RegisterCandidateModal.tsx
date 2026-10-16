@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { PLMSystem, PLMModule, CADTool, ClearanceLevel } from '../types';
+import { PLMSystem, PLMModule, CADTool, ComplianceLevel } from '../types';
 import { 
   X, 
   UserCheck, 
@@ -15,8 +15,15 @@ import {
   Briefcase,
   Layers,
   Award,
-  Plus
+  Plus,
+  ExternalLink,
+  Loader2,
+  CloudUpload,
+  Settings,
+  Download
 } from 'lucide-react';
+import { uploadResumeToCloudinary, getCloudinaryConfig, downloadResumeFile } from '../services/cloudinaryService';
+import { DocumentViewerModal } from './DocumentViewerModal';
 
 interface RegisterCandidateModalProps {
   isOpen: boolean;
@@ -24,11 +31,11 @@ interface RegisterCandidateModalProps {
   onSuccess?: () => void;
 }
 
-const CLEARANCE_OPTIONS: ClearanceLevel[] = [
+const COMPLIANCE_OPTIONS: ComplianceLevel[] = [
   'None',
-  'ITAR / Export Controlled',
-  'Secret',
-  'Top Secret'
+  'Industry Certified',
+  'Advanced',
+  'Expert'
 ];
 
 // Inline add-custom-option button for chip grids
@@ -113,19 +120,24 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
-  const [yearsOfExperience, setYearsOfExperience] = useState<number>(0);
+  const [yearsOfExperience, setYearsOfExperience] = useState<number | ''>('');
   const [primaryPLM, setPrimaryPLM] = useState<PLMSystem>('Siemens Teamcenter');
   const [secondaryPLMs, setSecondaryPLMs] = useState<PLMSystem[]>([]);
   const [modules, setModules] = useState<PLMModule[]>([]);
   const [cadTools, setCadTools] = useState<CADTool[]>([]);
-  const [clearance, setClearance] = useState<ClearanceLevel>('None');
+  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>('None');
   const [currentCompany, setCurrentCompany] = useState('');
   const [currentRole, setCurrentRole] = useState('');
+  const [currentCompensation, setCurrentCompensation] = useState('');
   const [expectedCompensation, setExpectedCompensation] = useState('');
   const [availableFrom, setAvailableFrom] = useState('');
   const [bio, setBio] = useState('');
   const [certificationsText, setCertificationsText] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
+  const [resumeUrl, setResumeUrl] = useState('');
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
   
   // Highlight Project
   const [projectTitle, setProjectTitle] = useState('');
@@ -157,6 +169,25 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
     );
   };
 
+  const handleResumeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setResumeFileName(file.name);
+    setIsUploadingResume(true);
+    setUploadError(null);
+
+    try {
+      const res = await uploadResumeToCloudinary(file);
+      setResumeUrl(res.secure_url);
+    } catch (err: any) {
+      console.error('Resume upload error:', err);
+      setUploadError(err.message || 'Failed to upload resume document. Please try again.');
+    } finally {
+      setIsUploadingResume(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !headline) return;
@@ -180,14 +211,16 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
         secondaryPLMs,
         modules,
         cadTools,
-        clearance,
+        complianceLevel,
         certifications: certs,
         currentCompany: currentCompany.trim(),
         currentRole: currentRole.trim() || headline.trim(),
+        currentCompensation: currentCompensation.trim(),
         expectedCompensation: expectedCompensation.trim(),
         availableFrom: availableFrom.trim(),
         bio: bio.trim(),
         resumeFileName: resumeFileName.trim() || `${name.trim().replace(/\s+/g, '_')}_Resume.pdf`,
+        resumeUrl: resumeUrl.trim() || undefined,
         portfolioProjects: projectTitle.trim() ? [
           {
             title: projectTitle.trim(),
@@ -245,7 +278,9 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 Candidate Profile Registered Successfully!
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Welcome aboard, <strong className="text-slate-900">{name}</strong>. Your profile has been created with ID <span className="font-mono font-bold text-blue-700">{registeredId}</span>. You can now apply with 1-click to verified enterprise engineering positions.
+                Welcome aboard,{' '}
+                <strong className="text-slate-900">{name}</strong>. Your profile has been created with ID{' '}
+                <span className="font-mono font-bold text-blue-700">{registeredId}</span>. You can now apply with 1-click to verified enterprise engineering positions.
               </p>
             </div>
 
@@ -267,11 +302,22 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 </span>
                 <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-medium text-[11px] flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" />
-                  {clearance}
+                  {complianceLevel}
                 </span>
-                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium text-[11px] flex items-center gap-1 border border-emerald-200">
+                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium text-[11px] flex items-center gap-2 border border-emerald-200">
                   <FileText className="w-3 h-3" />
-                  {resumeFileName}
+                  <span>{resumeFileName || 'Verified Resume.pdf'}</span>
+                  {resumeUrl && (
+                    <button
+                      type="button"
+                      onClick={() => downloadResumeFile(resumeUrl, resumeFileName || 'Resume.pdf')}
+                      className="ml-1 text-emerald-800 hover:text-emerald-950 font-bold underline flex items-center gap-1 cursor-pointer"
+                      title="Download PDF"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </button>
+                  )}
                 </span>
               </div>
             </div>
@@ -292,6 +338,135 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
 
+            {/* Top Highlight: Resume Document Upload */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/90 via-slate-50 to-indigo-50/50 border-2 border-blue-200/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                    <FileText className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Resume Document (PDF / DOCX)
+                  </h3>
+                </div>
+                {resumeUrl && (
+                  <span className="text-[11px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-md font-medium border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Resume Attached</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Resume File Upload Box */}
+              <div className={`p-4 rounded-xl border transition-all ${
+                resumeUrl 
+                  ? 'border-emerald-300 bg-emerald-50/70' 
+                  : isUploadingResume 
+                    ? 'border-blue-300 bg-blue-50/70' 
+                    : 'border-dashed border-slate-300 bg-white'
+              } flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-2xs shrink-0 ${
+                    resumeUrl 
+                      ? 'bg-emerald-600 text-white' 
+                      : isUploadingResume 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-blue-50 border border-blue-200 text-blue-600'
+                  }`}>
+                    {isUploadingResume ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : resumeUrl ? (
+                      <CheckCircle2 className="w-6 h-6" />
+                    ) : (
+                      <FileText className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-800 flex items-center gap-2 truncate">
+                      <span className="truncate">{resumeFileName || 'Select your Resume (PDF / DOCX)'}</span>
+                      {resumeUrl && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                          Attached
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {isUploadingResume ? (
+                        <span className="text-blue-600 font-semibold animate-pulse">Uploading and verifying resume document...</span>
+                      ) : resumeUrl ? (
+                        <span className="text-emerald-700 font-medium flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                          <span>Ready for employer review</span>
+                          <span className="hidden sm:inline">·</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsViewerOpen(true)}
+                            className="text-blue-600 hover:text-blue-800 font-bold underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>View Document</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ) : (
+                        'Attach your engineering resume for direct, 1-click job submissions.'
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  {resumeUrl && (
+                    <button
+                      type="button"
+                      onClick={() => downloadResumeFile(resumeUrl, resumeFileName || 'Resume.pdf')}
+                      className="px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1.5 cursor-pointer"
+                      title="Download attached PDF resume"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download</span>
+                    </button>
+                  )}
+
+                  <label className={`px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isUploadingResume
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : resumeUrl
+                        ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}>
+                    {isUploadingResume ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className={`w-3.5 h-3.5 ${resumeUrl ? 'text-slate-500' : 'text-white'}`} />
+                        <span>{resumeFileName ? 'Replace File' : 'Select Resume (PDF)'}</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      disabled={isUploadingResume}
+                      className="hidden"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleResumeFileChange}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Upload Error Banner */}
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                  <div className="flex-1">
+                    <div className="font-semibold text-red-800">Upload Issue</div>
+                    <div className="text-[11px] text-red-600 mt-0.5">{uploadError}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* 1. Identity & Contact */}
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -301,7 +476,7 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Full Name *
+                    Full Name <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -315,7 +490,7 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Professional Headline *
+                    Professional Headline <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -331,7 +506,7 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Email Address *
+                    Email Address <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="email"
@@ -373,29 +548,38 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Total Years of PLM Experience *
+                    Total Years of PLM Experience <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="40"
+                    min="0"
+                    max="50"
                     required
                     value={yearsOfExperience}
-                    onChange={e => setYearsOfExperience(Number(e.target.value))}
+                    placeholder="e.g. 5"
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setYearsOfExperience('');
+                      } else {
+                        const parsed = parseInt(val, 10);
+                        setYearsOfExperience(isNaN(parsed) ? '' : parsed);
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-mono"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Defense / Export Clearance Level
+                    Compliance Certification Level
                   </label>
                   <select
-                    value={clearance}
-                    onChange={e => setClearance(e.target.value as ClearanceLevel)}
+                    value={complianceLevel}
+                    onChange={e => setComplianceLevel(e.target.value as ComplianceLevel)}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white"
                   >
-                    {CLEARANCE_OPTIONS.map(c => (
+                    {COMPLIANCE_OPTIONS.map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
@@ -411,7 +595,7 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                  Primary PLM Platform * (Your core focus)
+                  Primary PLM Platform <span className="text-[#BA3A2C] font-bold">*</span> (Your core focus)
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {localSystems.map(sys => {
@@ -576,7 +760,20 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Current Compensation
+                  </label>
+                  <input
+                    type="text"
+                    value={currentCompensation}
+                    onChange={e => setCurrentCompensation(e.target.value)}
+                    placeholder="e.g. $130,000 / yr or ₹12,00,000"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Expected Compensation
@@ -631,37 +828,11 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
               </div>
             </div>
 
-            {/* 4. Resume Attachment & Portfolio Highlight */}
+            {/* 4. Enterprise PLM Project Highlight */}
             <div className="space-y-4 pt-2 border-t border-slate-100">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                4. Resume Document & Major Project Highlight
+                4. Major Enterprise PLM Project Highlight
               </h3>
-
-              {/* Resume File Upload Box */}
-              <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-blue-600 shadow-2xs">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-slate-800">{resumeFileName}</div>
-                    <div className="text-[11px] text-slate-500">PDF, DOCX resume file used for verified 1-click job submissions</div>
-                  </div>
-                </div>
-                <label className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-2xs">
-                  Change Resume
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx"
-                    onChange={e => {
-                      if (e.target.files && e.target.files[0]) {
-                        setResumeFileName(e.target.files[0].name);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
 
               {/* Featured Project */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
@@ -744,6 +915,14 @@ export const RegisterCandidateModal: React.FC<RegisterCandidateModalProps> = ({
         )}
 
       </div>
+
+      {/* In-app Document Viewer Modal */}
+      <DocumentViewerModal
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        url={resumeUrl}
+        filename={resumeFileName || 'Resume.pdf'}
+      />
     </div>
   );
 };

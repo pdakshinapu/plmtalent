@@ -33,7 +33,7 @@ export type CADTool =
   | 'Altium Designer'
   | (string & {});
 
-export type ClearanceLevel = 'None' | 'ITAR / Export Controlled' | 'Secret' | 'Top Secret';
+export type ComplianceLevel = 'None' | 'Industry Certified' | 'Advanced' | 'Expert';
 
 export type VerificationStatus = 'verified' | 'pending_verification' | 'under_review' | 'rejected';
 
@@ -56,10 +56,11 @@ export interface CandidateProfile {
   secondaryPLMs: PLMSystem[];
   modules: PLMModule[];
   cadTools: CADTool[];
-  clearance: ClearanceLevel;
+  complianceLevel: ComplianceLevel;
   certifications: string[];
   currentCompany: string;
   currentRole: string;
+  currentCompensation?: string;
   expectedCompensation: string;
   availableFrom: string;
   bio: string;
@@ -67,6 +68,7 @@ export interface CandidateProfile {
   avatarInitials: string;
   accentColor: string;
   resumeFileName?: string;
+  resumeUrl?: string;
   profileVisibility?: CandidateProfileVisibility;
   region?: string;
   seniorityLevel?: string;
@@ -113,17 +115,25 @@ export interface EmployerProfile {
   id: string;
   companyName: string;
   legalEntity: string;
+  companyType?: string;
   corporateDomain: string;
   contactEmail: string;
+  contactPhone?: string;
   adminEmail: string;
   contactPerson: string;
   contactTitle: string;
-  industry: 'Aerospace & Defense' | 'Automotive & EV' | 'Medical Technology' | 'Industrial Machinery' | 'Electronics';
+  linkedInUrl?: string;
+  industry: string;
   headquarters: string;
+  address?: string;
+  operatingLocations?: string[];
   companySize: string;
+  yearFounded?: string;
   website: string;
+  tagline?: string;
   primaryPLMStack: PLMSystem[];
   cadEnvironments: CADTool[];
+  plmTeamSize?: string;
   verificationStatus: VerificationStatus;
   verificationRequestedAt: string;
   verifiedAt?: string;
@@ -157,8 +167,8 @@ export interface Job {
     currency: string;
     period: 'yearly' | 'hourly';
   };
-  itarRequired: boolean;
-  clearanceRequired: ClearanceLevel;
+  complianceCertRequired: boolean;
+  complianceLevelRequired: ComplianceLevel;
   summary: string;
   responsibilities: string[];
   requirements: string[];
@@ -183,6 +193,7 @@ export interface Application {
   appliedDate: string;
   coverNote: string;
   resumeFileName: string;
+  resumeUrl?: string;
   status: 'applied' | 'screening' | 'technical_interview' | 'offer_extended' | 'archived';
   internalNotes?: string;
 }
@@ -194,3 +205,15 @@ export interface UserSession {
   role: UserRole;
   companyName?: string;
 }
+
+export interface ContactEnquiry {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  topic: string;
+  message: string;
+  submittedAt: string;
+  status: 'new' | 'reviewed' | 'resolved';
+}
+

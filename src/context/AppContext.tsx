@@ -6,7 +6,8 @@ import {
   Job, 
   Application,
   UserSession,
-  JobInvitation
+  JobInvitation,
+  ContactEnquiry
 } from '../types';
 import { auth, db, googleProvider } from '../firebase';
 import { 
@@ -32,6 +33,9 @@ import {
   updateCandidateInFirestore,
   subscribeToJobInvitations,
   saveJobInvitationToFirestore,
+  saveContactEnquiryToFirestore,
+  subscribeToContactEnquiries,
+  updateContactEnquiryStatusInFirestore,
 } from '../services/firebaseService';
 import {
   PlatformChoices,
@@ -49,6 +53,7 @@ interface AppContextType {
   currentEmployerId: string;
   setCurrentEmployerId: (id: string) => void;
   currentEmployer: EmployerProfile | undefined;
+  updateEmployer: (data: Partial<EmployerProfile>) => Promise<void>;
   jobs: Job[];
   applications: Application[];
   savedJobIds: string[];
@@ -58,7 +63,7 @@ interface AppContextType {
   approveEmployer: (employerId: string, notes?: string) => void;
   rejectEmployer: (employerId: string, reason: string) => void;
   postJob: (jobData: Omit<Job, 'id' | 'employerId' | 'employerName' | 'employerLogoInitials' | 'employerLogoBg' | 'isEmployerVerified' | 'postedAt' | 'applicantCount' | 'status'>) => { success: boolean; message: string };
-  applyToJob: (jobId: string, coverNote: string, resumeFileName?: string) => { success: boolean; message: string };
+  applyToJob: (jobId: string, coverNote: string, resumeFileName?: string, resumeUrl?: string) => { success: boolean; message: string };
   updateApplicationStage: (applicationId: string, newStatus: Application['status'], notes?: string) => void;
   notificationToast: { message: string; type: 'success' | 'info' | 'warning' } | null;
   dismissToast: () => void;
@@ -78,6 +83,10 @@ interface AppContextType {
   respondToJobInvitation: (invitationId: string, accept: boolean) => void;
   isConnected: (candidateId: string, employerId?: string) => boolean;
   getConnectionForCandidate: (candidateId: string, employerId?: string) => JobInvitation | undefined;
+  // Contact enquiries submitted from Landing Page
+  contactEnquiries: ContactEnquiry[];
+  submitContactEnquiry: (data: Omit<ContactEnquiry, 'id' | 'submittedAt' | 'status'>) => Promise<{ success: boolean; message: string }>;
+  updateContactEnquiryStatus: (enquiryId: string, status: ContactEnquiry['status']) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -116,7 +125,7 @@ const createDefaultCandidateProfile = (userId: string, userName: string, userEma
   secondaryPLMs: [],
   modules: [],
   cadTools: [],
-  clearance: 'None',
+  complianceLevel: 'None',
   certifications: [],
   currentCompany: '',
   currentRole: '',
@@ -135,17 +144,25 @@ const createDefaultEmployerProfile = (userId: string, companyName: string, userN
     id: userId,
     companyName: company,
     legalEntity: company,
+    companyType: 'Corporate / Enterprise',
     corporateDomain: userEmail.includes('@') ? userEmail.split('@')[1] : '',
     contactPerson: userName,
-    contactTitle: '',
+    contactTitle: 'Talent Acquisition / HR Lead',
     contactEmail: userEmail,
+    contactPhone: '',
     adminEmail: userEmail,
-    industry: 'Aerospace & Defense',
+    linkedInUrl: '',
+    industry: 'Aerospace & Engineering',
     headquarters: '',
-    companySize: '10 - 50 employees',
+    address: '',
+    operatingLocations: [],
+    companySize: '51 - 200 employees',
+    yearFounded: '',
     website: '',
+    tagline: '',
     primaryPLMStack: [],
     cadEnvironments: [],
+    plmTeamSize: '',
     verificationStatus: 'pending_verification',
     verificationRequestedAt: new Date().toISOString(),
     taxRegistrationNumber: '',
@@ -189,6 +206,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
   const [platformChoices, setPlatformChoices] = useState<PlatformChoices>(DEFAULT_CHOICES);
+  const [contactEnquiries, setContactEnquiries] = useState<ContactEnquiry[]>([]);
 
   useEffect(() => {
     try {
@@ -294,6 +312,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPlatformChoices(choices);
     });
 
+    const unsubEnquiries = subscribeToContactEnquiries((enquiries) => {
+      setContactEnquiries(enquiries);
+    });
+
     return () => {
       unsubAuth();
       unsubEmployers();
@@ -302,6 +324,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubCandidates();
       unsubInvitations();
       unsubChoices();
+      unsubEnquiries();
     };
   }, []);
 
@@ -617,6 +640,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Candidate profile updated and saved to Firebase', 'success');
   };
 
+  const updateEmployer = async (data: Partial<EmployerProfile>) => {
+    if (!currentEmployer) return;
+
+    const newCompanyName = data.companyName !== undefined ? data.companyName.trim() : currentEmployer.companyName;
+    const initials = data.logoInitials || (newCompanyName ? (newCompanyName.slice(0, 2) || 'EM').toUpperCase() : currentEmployer.logoInitials);
+
+    // If company was rejected and they updated verification docs or details, move back to pending_verification
+    const shouldReapplyVerification = currentEmployer.verificationStatus === 'rejected' && (data.taxRegistrationNumber || data.verificationDocName);
+
+    const updated: EmployerProfile = {
+      ...currentEmployer,
+      ...data,
+      companyName: newCompanyName || currentEmployer.companyName,
+      logoInitials: initials,
+      ...(shouldReapplyVerification ? {
+        verificationStatus: 'pending_verification' as const,
+        verificationRequestedAt: new Date().toISOString(),
+        rejectionReason: undefined
+      } : {})
+    };
+
+    setEmployers(prev => prev.map(emp => emp.id === updated.id ? updated : emp));
+
+    // Also update any jobs posted by this employer with new name/initials
+    if (newCompanyName && newCompanyName !== currentEmployer.companyName) {
+      setJobs(prev => prev.map(j => {
+        if (j.employerId === updated.id) {
+          const updatedJob = { ...j, employerName: newCompanyName, employerLogoInitials: initials };
+          saveJobToFirestore(updatedJob).catch(console.warn);
+          return updatedJob;
+        }
+        return j;
+      }));
+    }
+
+    try {
+      await saveEmployerToFirestore(updated);
+      showToast('Corporate profile updated and synced successfully', 'success');
+    } catch (err) {
+      console.warn('Error saving employer to Firestore:', err);
+      showToast('Profile updated locally (offline mode)', 'info');
+    }
+  };
+
   const toggleSaveJob = (jobId: string) => {
     setSavedJobIds(prev => {
       const exists = prev.includes(jobId);
@@ -647,6 +714,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       accentColor: randomColor,
       verifiedSpecialist: true,
       resumeFileName: newCand.resumeFileName?.trim() || undefined,
+      resumeUrl: newCand.resumeUrl?.trim() || undefined,
     };
 
     setCandidate(createdCand);
@@ -783,7 +851,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 5. Apply to Job
-  const applyToJob = (jobId: string, coverNote: string, resumeFileName?: string): { success: boolean; message: string } => {
+  const applyToJob = (jobId: string, coverNote: string, resumeFileName?: string, resumeUrl?: string): { success: boolean; message: string } => {
     let effectiveCandidate = candidate;
     if (!effectiveCandidate && (currentUser || userSession)) {
       const uid = currentUser?.uid || userSession?.id || `cand-${Date.now()}`;
@@ -824,7 +892,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const matchingModules = jobModules.filter(m => candidateModules.includes(m));
     score += Math.min(10, matchingModules.length * 3);
 
-    if (targetJob.itarRequired && effectiveCandidate.clearance && effectiveCandidate.clearance !== 'None') score += 5;
+    if (targetJob.complianceCertRequired && effectiveCandidate.complianceLevel && effectiveCandidate.complianceLevel !== 'None') score += 5;
 
     const newApp: Application = {
       id: `app-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -842,6 +910,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       appliedDate: new Date().toISOString(),
       coverNote: coverNote.trim() || `Application submitted by ${effectiveCandidate.name}.`,
       resumeFileName: resumeFileName?.trim() || effectiveCandidate.resumeFileName || `${effectiveCandidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+      resumeUrl: resumeUrl?.trim() || effectiveCandidate.resumeUrl || undefined,
       status: 'applied',
     };
 
@@ -942,6 +1011,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const submitContactEnquiry = async (
+    data: Omit<ContactEnquiry, 'id' | 'submittedAt' | 'status'>
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const newEnquiry: ContactEnquiry = {
+        id: `enq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: data.name.trim(),
+        email: data.email.trim(),
+        phone: data.phone?.trim() || '',
+        topic: data.topic,
+        message: data.message.trim(),
+        submittedAt: new Date().toISOString(),
+        status: 'new',
+      };
+
+      setContactEnquiries(prev => [newEnquiry, ...prev]);
+      await saveContactEnquiryToFirestore(newEnquiry);
+      showToast('Thank you! Your enquiry has been received and saved.', 'success');
+      return { success: true, message: 'Enquiry received successfully.' };
+    } catch (err) {
+      console.error('Error submitting enquiry:', err);
+      showToast('Enquiry received locally.', 'info');
+      return { success: true, message: 'Enquiry recorded.' };
+    }
+  };
+
+  const updateContactEnquiryStatus = async (
+    enquiryId: string, 
+    status: ContactEnquiry['status']
+  ) => {
+    setContactEnquiries(prev => 
+      prev.map(item => item.id === enquiryId ? { ...item, status } : item)
+    );
+    await updateContactEnquiryStatusInFirestore(enquiryId, status);
+    showToast(`Enquiry marked as ${status}.`, 'info');
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -954,6 +1060,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentEmployerId,
         setCurrentEmployerId,
         currentEmployer,
+        updateEmployer,
         jobs,
         applications,
         savedJobIds,
@@ -981,6 +1088,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         respondToJobInvitation,
         isConnected,
         getConnectionForCandidate,
+        contactEnquiries,
+        submitContactEnquiry,
+        updateContactEnquiryStatus,
       }}
     >
       {children}

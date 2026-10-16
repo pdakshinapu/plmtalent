@@ -6,13 +6,13 @@ import { getStorage } from "firebase/storage";
 
 // Web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDgFiTwQy31IeELU15Fc5nflaJXkDy70VQ",
-  authDomain: "plmtalenthunt.firebaseapp.com",
-  projectId: "plmtalenthunt",
-  storageBucket: "plmtalenthunt.firebasestorage.app",
-  messagingSenderId: "508729190436",
-  appId: "1:508729190436:web:e83f3f61079b19f0d2d0b1",
-  measurementId: "G-EX9105H2JM"
+  apiKey: "AIzaSyAwEcQQQFz5tmfIlL1sbz3ujSmo3niJfRU",
+  authDomain: "plmspiders-f07c7.firebaseapp.com",
+  projectId: "plmspiders-f07c7",
+  storageBucket: "plmspiders-f07c7.firebasestorage.app",
+  messagingSenderId: "807519099942",
+  appId: "1:807519099942:web:039eda5beff0d735a99ae7",
+  measurementId: "G-8P66PJZFGZ"
 };
 
 // Initialize Firebase

@@ -14,10 +14,10 @@ import {
   Lock, 
   CheckCircle2, 
   Send,
-  Building2,
   ChevronRight
 } from 'lucide-react';
 import { SendJobInvitationModal } from './SendJobInvitationModal';
+import { downloadResumeFile } from '../services/cloudinaryService';
 
 interface CandidateSimpleDetailModalProps {
   candidate: CandidateProfile | null;
@@ -354,13 +354,24 @@ export const CandidateSimpleDetailModal: React.FC<CandidateSimpleDetailModalProp
                         {candidate.resumeFileName || `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`}
                       </span>
                     </div>
-                    <button
-                      onClick={() => alert(`Downloading verified resume: ${candidate.resumeFileName || 'Resume.pdf'}`)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Resume</span>
-                    </button>
+                    {candidate.resumeUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => downloadResumeFile(candidate.resumeUrl!, candidate.resumeFileName || 'Resume.pdf')}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Resume</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => alert(`Downloading verified resume: ${candidate.resumeFileName || 'Resume.pdf'}`)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Resume</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (

@@ -198,7 +198,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Company Name *
+                    Company Name <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -212,7 +212,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Legal Registered Entity Name *
+                    Legal Registered Entity Name <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -228,7 +228,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Corporate Domain *
+                    Corporate Domain <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -242,7 +242,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Tax ID / EIN / Business Reg *
+                    Tax ID / EIN / Business Reg <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -258,17 +258,24 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Primary Industry
                   </label>
-                  <select
-                    value={industry}
-                    onChange={e => setIndustry(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 bg-white"
-                  >
-                    <option value="Aerospace & Defense">Aerospace & Defense</option>
-                    <option value="Automotive & EV">Automotive & EV</option>
-                    <option value="Medical Technology">Medical Technology</option>
-                    <option value="Industrial Machinery">Industrial Machinery</option>
-                    <option value="Electronics">Electronics</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={industry}
+                      onChange={e => setIndustry(e.target.value as any)}
+                      className="w-full appearance-none px-3.5 py-2.5 sm:py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 bg-white text-slate-800 pr-8 cursor-pointer"
+                    >
+                      <option value="Aerospace & Defense">Aerospace & Defense</option>
+                      <option value="Automotive & EV">Automotive & EV</option>
+                      <option value="Medical Technology">Medical Technology</option>
+                      <option value="Industrial Machinery">Industrial Machinery</option>
+                      <option value="Electronics">Electronics</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-500">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -290,17 +297,24 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Company Size
                   </label>
-                  <select
-                    value={companySize}
-                    onChange={e => setCompanySize(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 bg-white"
-                  >
-                    <option value="50 - 200 employees">50 - 200 employees</option>
-                    <option value="200 - 500 employees">200 - 500 employees</option>
-                    <option value="500 - 1,000 employees">500 - 1,000 employees</option>
-                    <option value="1,000 - 5,000 employees">1,000 - 5,000 employees</option>
-                    <option value="5,000+ employees">5,000+ employees</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={companySize}
+                      onChange={e => setCompanySize(e.target.value)}
+                      className="w-full appearance-none px-3.5 py-2.5 sm:py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 bg-white text-slate-800 pr-8 cursor-pointer"
+                    >
+                      <option value="50 - 200 employees">50 - 200 employees</option>
+                      <option value="200 - 500 employees">200 - 500 employees</option>
+                      <option value="500 - 1,000 employees">500 - 1,000 employees</option>
+                      <option value="1,000 - 5,000 employees">1,000 - 5,000 employees</option>
+                      <option value="5,000+ employees">5,000+ employees</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-500">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -314,7 +328,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Representative Full Name *
+                    Representative Full Name <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -343,7 +357,7 @@ export const RegisterEmployerModal: React.FC<RegisterEmployerModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Official Corporate Email (Domain-matched) *
+                    Official Corporate Email (Domain-matched) <span className="text-[#BA3A2C] font-bold">*</span>
                   </label>
                   <input
                     type="email"

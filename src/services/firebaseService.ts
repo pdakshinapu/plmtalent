@@ -18,6 +18,7 @@ import {
   Job,
   Application,
   JobInvitation,
+  ContactEnquiry,
 } from "../types";
 
 export const COLLECTIONS = {
@@ -28,6 +29,7 @@ export const COLLECTIONS = {
   CANDIDATES: "candidates",
   SAVED_JOBS: "saved_jobs",
   JOB_INVITATIONS: "job_invitations",
+  ENQUIRIES: "enquiries",
 };
 
 // Purge any legacy dummy data from Firestore
@@ -161,12 +163,13 @@ export function subscribeToCandidates(
       snapshot.forEach((d) => {
         if (!DUMMY_IDS.CANDIDATES.includes(d.id)) {
           const data = d.data() as CandidateProfile;
-          if (data && (data.name || data.headline || data.primaryPLM)) {
+          
+          // Only show candidates that have actually filled out their profile (have a name AND a headline)
+          // This prevents empty test accounts from showing up as dummy data
+          if (data && data.name && data.headline && data.name.trim() !== '' && data.headline.trim() !== '') {
             list.push({
               ...data,
               id: d.id,
-              name: data.name || 'PLM Specialist',
-              headline: data.headline || 'Verified PLM Specialist',
             } as CandidateProfile);
           }
         }
@@ -239,11 +242,31 @@ export function subscribeToCandidate(
   }
 }
 
+// Helper to recursively remove undefined fields which Firestore rejects
+export function cleanForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(cleanForFirestore);
+
+  const clean: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      clean[key] = cleanForFirestore(val);
+    }
+  }
+  return clean;
+}
+
 // Update Candidate Profile in Firestore
 export async function updateCandidateInFirestore(profile: CandidateProfile) {
   try {
     const docRef = doc(db, COLLECTIONS.CANDIDATES, profile.id);
-    await setDoc(docRef, profile, { merge: true });
+    const cleaned = cleanForFirestore(profile);
+    await setDoc(docRef, cleaned, { merge: true });
+    console.log("[Firestore] Candidate profile saved successfully:", profile.id, {
+      resumeFileName: profile.resumeFileName,
+      resumeUrl: profile.resumeUrl,
+    });
     return true;
   } catch (error) {
     console.error("Error updating candidate in Firestore:", error);
@@ -255,7 +278,8 @@ export async function updateCandidateInFirestore(profile: CandidateProfile) {
 export async function saveEmployerToFirestore(employer: EmployerProfile) {
   try {
     const docRef = doc(db, COLLECTIONS.EMPLOYERS, employer.id);
-    await setDoc(docRef, employer, { merge: true });
+    const cleaned = cleanForFirestore(employer);
+    await setDoc(docRef, cleaned, { merge: true });
     return true;
   } catch (error) {
     console.error("Error saving employer to Firestore:", error);
@@ -267,7 +291,8 @@ export async function saveEmployerToFirestore(employer: EmployerProfile) {
 export async function saveJobToFirestore(job: Job) {
   try {
     const docRef = doc(db, COLLECTIONS.JOBS, job.id);
-    await setDoc(docRef, job, { merge: true });
+    const cleaned = cleanForFirestore(job);
+    await setDoc(docRef, cleaned, { merge: true });
     return true;
   } catch (error) {
     console.error("Error saving job to Firestore:", error);
@@ -279,10 +304,64 @@ export async function saveJobToFirestore(job: Job) {
 export async function saveApplicationToFirestore(app: Application) {
   try {
     const docRef = doc(db, COLLECTIONS.APPLICATIONS, app.id);
-    await setDoc(docRef, app, { merge: true });
+    const cleaned = cleanForFirestore(app);
+    await setDoc(docRef, cleaned, { merge: true });
+    console.log("[Firestore] Job application saved successfully:", app.id, {
+      resumeFileName: app.resumeFileName,
+      resumeUrl: app.resumeUrl,
+    });
     return true;
   } catch (error) {
     console.error("Error saving application to Firestore:", error);
+    return false;
+  }
+}
+
+// Save Contact Enquiry in Firestore
+export async function saveContactEnquiryToFirestore(enquiry: ContactEnquiry) {
+  try {
+    const docRef = doc(db, COLLECTIONS.ENQUIRIES, enquiry.id);
+    await setDoc(docRef, enquiry, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Error saving contact enquiry to Firestore:", error);
+    return false;
+  }
+}
+
+// Subscribe to Contact Enquiries
+export function subscribeToContactEnquiries(
+  onData: (enquiries: ContactEnquiry[]) => void,
+  onError?: (err: any) => void
+) {
+  try {
+    const colRef = collection(db, COLLECTIONS.ENQUIRIES);
+    return onSnapshot(colRef, (snapshot) => {
+      const list: ContactEnquiry[] = [];
+      snapshot.forEach((d) => {
+        list.push({ id: d.id, ...d.data() } as ContactEnquiry);
+      });
+      // Sort newest first
+      list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+      onData(list);
+    }, (error) => {
+      console.warn("Firestore contact enquiries listener error:", error);
+      onError?.(error);
+    });
+  } catch (err) {
+    console.warn("Failed to subscribe to contact enquiries:", err);
+    return () => {};
+  }
+}
+
+// Update Contact Enquiry status
+export async function updateContactEnquiryStatusInFirestore(enquiryId: string, status: ContactEnquiry['status']) {
+  try {
+    const docRef = doc(db, COLLECTIONS.ENQUIRIES, enquiryId);
+    await updateDoc(docRef, { status });
+    return true;
+  } catch (error) {
+    console.error("Error updating enquiry status:", error);
     return false;
   }
 }

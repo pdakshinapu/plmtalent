@@ -20,7 +20,13 @@ import {
   Sparkles,
   Search,
   Filter,
-  Settings
+  Settings,
+  Globe,
+  MapPin,
+  Phone,
+  Linkedin,
+  Mail,
+  MessageSquare
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -41,7 +47,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
     jobs, 
     applications, 
     candidate,
-    setCurrentEmployerId
+    setCurrentEmployerId,
+    contactEnquiries,
+    updateContactEnquiryStatus
   } = useApp();
 
   const [selectedAuditEmpId, setSelectedAuditEmpId] = useState<string | null>(null);
@@ -339,6 +347,133 @@ export const AdminView: React.FC<AdminViewProps> = ({
     );
   }
 
+  // Sub-view: Contact Enquiries Management
+  if (activeTab === 'contact-messages') {
+    const list = contactEnquiries || [];
+    const newCount = list.filter(e => e.status === 'new').length;
+
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#BA3A2C] text-white flex items-center justify-center shadow-xs">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">
+                  Landing Page Contact Enquiries
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  All messages submitted through the PLMSpider landing page contact form
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-red-50 text-[#BA3A2C] font-semibold text-xs border border-red-100">
+              {newCount} New Messages
+            </span>
+            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold text-xs border border-slate-200">
+              {list.length} Total
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {list.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto border border-slate-100">
+                <Mail className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">No Contact Enquiries Yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                When visitors or enterprise clients submit the contact form on the home page, their inquiries will be saved in real time and listed here.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {list.map((enquiry) => (
+                <div key={enquiry.id} className="p-5 hover:bg-slate-50/70 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900">{enquiry.name}</span>
+                        <a 
+                          href={`mailto:${enquiry.email}`} 
+                          className="text-xs font-mono text-blue-600 hover:underline inline-flex items-center gap-1"
+                        >
+                          <Mail className="w-3 h-3" /> {enquiry.email}
+                        </a>
+                        {enquiry.phone && (
+                          <a 
+                            href={`tel:${enquiry.phone}`} 
+                            className="text-xs font-mono text-slate-600 hover:underline inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded"
+                          >
+                            <Phone className="w-3 h-3 text-slate-400" /> {enquiry.phone}
+                          </a>
+                        )}
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          {enquiry.topic}
+                        </span>
+                        {enquiry.status === 'new' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            New
+                          </span>
+                        )}
+                        {enquiry.status === 'reviewed' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            Reviewed
+                          </span>
+                        )}
+                        {enquiry.status === 'resolved' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Resolved
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-700 mt-2 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap leading-relaxed">
+                        {enquiry.message}
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-mono mt-1.5">
+                        Received: {new Date(enquiry.submittedAt).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="flex sm:flex-col gap-1.5 shrink-0 items-end">
+                      <a
+                        href={`mailto:${enquiry.email}?subject=${encodeURIComponent(`Re: PLMSpider enquiry - ${enquiry.topic}`)}`}
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-[#BA3A2C] hover:bg-[#9E2F23] rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Mail className="w-3.5 h-3.5" /> Reply
+                      </a>
+                      {enquiry.status !== 'reviewed' && (
+                        <button
+                          onClick={() => updateContactEnquiryStatus(enquiry.id, 'reviewed')}
+                          className="px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          Mark Reviewed
+                        </button>
+                      )}
+                      {enquiry.status !== 'resolved' && (
+                        <button
+                          onClick={() => updateContactEnquiryStatus(enquiry.id, 'resolved')}
+                          className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded border border-emerald-200 transition-colors cursor-pointer"
+                        >
+                          Mark Resolved
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Sub-view: Platform Settings (Admin can manage dynamic PLM options)
   if (activeTab === 'platform-settings') {
     return (
@@ -506,6 +641,51 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
               </div>
 
+              {/* Enterprise Profile Quick Summary */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 text-xs space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    <Building2 className="w-3 h-3 text-blue-600" />
+                    {activeAuditEmp.companyType || 'Corporate / Enterprise'}
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    <Layers className="w-3 h-3 text-indigo-600" />
+                    {activeAuditEmp.industry}
+                  </span>
+                  <span className="text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    Size: {activeAuditEmp.companySize}
+                  </span>
+                  {activeAuditEmp.yearFounded && (
+                    <span className="text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      Est. {activeAuditEmp.yearFounded}
+                    </span>
+                  )}
+                  {activeAuditEmp.headquarters && (
+                    <span className="inline-flex items-center gap-1 text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      <MapPin className="w-3 h-3 text-rose-600" />
+                      {activeAuditEmp.headquarters}
+                    </span>
+                  )}
+                  {activeAuditEmp.website && (
+                    <a
+                      href={activeAuditEmp.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 bg-white px-2 py-0.5 rounded border border-slate-200 hover:underline"
+                    >
+                      <Globe className="w-3 h-3" />
+                      {activeAuditEmp.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  )}
+                </div>
+
+                {activeAuditEmp.about && (
+                  <p className="text-[11px] text-slate-600 italic line-clamp-2">
+                    "{activeAuditEmp.about}"
+                  </p>
+                )}
+              </div>
+
               {/* 4-Point Governance Audit Checklist */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -545,7 +725,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-mono text-slate-700 text-[11px]">
-                      {activeAuditEmp.taxRegistrationNumber}
+                      {activeAuditEmp.taxRegistrationNumber || 'Pending Submission'}
                     </div>
                     <p className="text-[11px] text-slate-500">
                       Registered in good standing with corporate business authorities.
@@ -564,10 +744,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-semibold text-slate-800 text-[11px]">
-                      {activeAuditEmp.primaryPLMStack.join(', ')}
+                      {activeAuditEmp.primaryPLMStack?.length ? activeAuditEmp.primaryPLMStack.join(', ') : 'No PLM stack declared'}
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      CAD Tools: {activeAuditEmp.cadEnvironments.join(', ')}
+                      CAD Tools: {activeAuditEmp.cadEnvironments?.length ? activeAuditEmp.cadEnvironments.join(', ') : 'None declared'}
                     </p>
                   </div>
 
@@ -583,11 +763,28 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       </span>
                     </div>
                     <div className="font-medium text-slate-800 text-[11px]">
-                      {activeAuditEmp.contactPerson} ({activeAuditEmp.contactTitle})
+                      {activeAuditEmp.contactPerson || 'Not provided'} ({activeAuditEmp.contactTitle || 'Hiring Lead'})
                     </div>
-                    <p className="text-[11px] font-mono text-slate-500">
-                      {activeAuditEmp.contactEmail}
-                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
+                      <span className="font-mono">{activeAuditEmp.contactEmail}</span>
+                      {activeAuditEmp.contactPhone && (
+                        <span className="flex items-center gap-1 font-mono text-slate-600">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          {activeAuditEmp.contactPhone}
+                        </span>
+                      )}
+                      {activeAuditEmp.linkedInUrl && (
+                        <a
+                          href={activeAuditEmp.linkedInUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-0.5 text-blue-600 hover:underline"
+                        >
+                          <Linkedin className="w-3 h-3" />
+                          LinkedIn
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                 </div>

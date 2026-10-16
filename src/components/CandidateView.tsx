@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Job, PLMSystem, PLMModule, ClearanceLevel, Application } from '../types';
+import { Job, PLMSystem, PLMModule, ComplianceLevel, Application } from '../types';
 import { 
   Search, 
   MapPin, 
@@ -23,10 +23,15 @@ import {
   ArrowUpRight,
   X,
   Edit3,
-  Zap
+  Zap,
+  ExternalLink,
+  Upload,
+  Download
 } from 'lucide-react';
 import { EditCandidateModal } from './EditCandidateModal';
 import { CandidateInvitationsView } from './CandidateInvitationsView';
+import { downloadResumeFile } from '../services/cloudinaryService';
+import { DocumentViewerModal } from './DocumentViewerModal';
 
 interface CandidateViewProps {
   activeTab: string;
@@ -75,7 +80,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSystem, setSelectedSystem] = useState<PLMSystem | 'All'>('All');
   const [selectedModule, setSelectedModule] = useState<PLMModule | 'All'>('All');
-  const [clearanceFilter, setClearanceFilter] = useState<'All' | 'ITAR' | 'Commercial'>('All');
+  const [complianceFilter, setComplianceFilter] = useState<'All' | 'Certified' | 'Standard'>('All');
   const [workplaceFilter, setWorkplaceFilter] = useState<'All' | 'Remote' | 'Hybrid' | 'Onsite'>('All');
 
   // Job Modal & Application Modal
@@ -84,6 +89,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
   const [coverNote, setCoverNote] = useState('');
   const [resumeFileName, setResumeFileName] = useState('Candidate_PLM_Resume.pdf');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [viewingResume, setViewingResume] = useState<{ url: string; filename?: string } | null>(null);
 
   // Filtered jobs calculation
   const filteredJobs = useMemo(() => {
@@ -110,10 +116,10 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
         if (!(job.requiredModules || []).includes(selectedModule)) return false;
       }
 
-      if (clearanceFilter === 'ITAR') {
-        if (!job.itarRequired) return false;
-      } else if (clearanceFilter === 'Commercial') {
-        if (job.itarRequired) return false;
+      if (complianceFilter === 'Certified') {
+        if (!job.complianceCertRequired) return false;
+      } else if (complianceFilter === 'Standard') {
+        if (job.complianceCertRequired) return false;
       }
 
       if (workplaceFilter !== 'All') {
@@ -122,7 +128,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
 
       return true;
     });
-  }, [jobs, searchQuery, selectedSystem, selectedModule, clearanceFilter, workplaceFilter]);
+  }, [jobs, searchQuery, selectedSystem, selectedModule, complianceFilter, workplaceFilter]);
 
   // Compute match score helper
   const computeMatch = (job: Job) => {
@@ -136,7 +142,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
     const matchingMods = jobModules.filter(m => candidateModules.includes(m));
     score += Math.min(10, matchingMods.length * 3);
 
-    if (job.itarRequired && candidate.clearance && candidate.clearance !== 'None') score += 5;
+    if (job.complianceCertRequired && candidate.complianceLevel && candidate.complianceLevel !== 'None') score += 5;
     return Math.min(99, score);
   };
 
@@ -151,13 +157,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
 
   const handleDirectApply = (job: Job) => {
     const defaultCoverNote = `Hello ${job.employerName || 'Enterprise'} hiring team,\n\nI am applying for the ${job.title} role via verified 1-click application. My PLM credentials and experience are verified on PLMSpider.`;
-    return applyToJob(job.id, defaultCoverNote, resumeFileName);
+    return applyToJob(job.id, defaultCoverNote, candidate?.resumeFileName || resumeFileName, candidate?.resumeUrl);
   };
 
   const handleConfirmApply = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedJob) return;
-    const res = applyToJob(selectedJob.id, coverNote, resumeFileName);
+    const res = applyToJob(selectedJob.id, coverNote, candidate?.resumeFileName || resumeFileName, candidate?.resumeUrl);
     setIsApplying(false);
     if (res.success) {
       setSelectedJob(null);
@@ -226,7 +232,19 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                         <span>·</span>
                         <span>Applied {new Date(app.appliedDate).toLocaleDateString()}</span>
                         <span>·</span>
-                        <span className="font-mono text-slate-600">{app.resumeFileName}</span>
+                        {app.resumeUrl ? (
+                          <a
+                            href={app.resumeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            <span>{app.resumeFileName}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="font-mono text-slate-600">{app.resumeFileName}</span>
+                        )}
                       </div>
                     </div>
 
@@ -395,14 +413,50 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
 
             <div>
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Defense / Export Clearance
+                Compliance Certification
               </h3>
               <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
-                <span>{candidate?.clearance || 'None'}</span>
+                <span>{candidate?.complianceLevel || 'None'}</span>
               </div>
             </div>
           </div>
+
+          {/* Current Career & Compensation */}
+          {(candidate?.currentCompany || candidate?.currentRole || candidate?.currentCompensation || candidate?.expectedCompensation || candidate?.availableFrom) && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {candidate?.currentCompany && (
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-medium">Current Employer</span>
+                  <span className="text-xs font-bold text-slate-800">{candidate.currentCompany}</span>
+                </div>
+              )}
+              {candidate?.currentRole && (
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-medium">Current Role</span>
+                  <span className="text-xs font-bold text-slate-800">{candidate.currentRole}</span>
+                </div>
+              )}
+              {candidate?.currentCompensation && (
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-medium">Current Compensation</span>
+                  <span className="text-xs font-bold font-mono text-slate-900">{candidate.currentCompensation}</span>
+                </div>
+              )}
+              {candidate?.expectedCompensation && (
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-medium">Expected Compensation</span>
+                  <span className="text-xs font-bold font-mono text-blue-700">{candidate.expectedCompensation}</span>
+                </div>
+              )}
+              {candidate?.availableFrom && (
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-medium">Availability</span>
+                  <span className="text-xs font-bold text-slate-800">{candidate.availableFrom}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Specialized Modules */}
           <div>
@@ -447,6 +501,69 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             </div>
           </div>
 
+          {/* Verified Resume Document Card */}
+          <div className="pt-4 border-t border-slate-100">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              Verified Engineering Resume
+            </h3>
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-blue-600 shadow-2xs shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>{candidate?.resumeFileName || 'Resume not uploaded yet'}</span>
+                    {candidate?.resumeUrl && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Verified Document
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {candidate?.resumeUrl ? (
+                      <span className="text-emerald-700 font-medium">Document attached and verified for employer submissions</span>
+                    ) : (
+                      'Attach your engineering resume for direct, 1-click job submissions.'
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {candidate?.resumeUrl && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => downloadResumeFile(candidate.resumeUrl!, candidate.resumeFileName || 'Resume.pdf')}
+                      className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                      title="Download PDF document"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Download</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewingResume({ url: candidate.resumeUrl!, filename: candidate.resumeFileName || 'Resume.pdf' })}
+                      className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <span>View Resume</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{candidate?.resumeUrl ? 'Change Resume' : 'Upload Resume'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Portfolio & Major Deployments */}
           <div className="pt-4 border-t border-slate-100 space-y-3">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -484,7 +601,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             Verified PLM Enterprise Network
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            All employers on this directory have completed corporate domain audit and legal verification by the Main Admin
+            All employers on this directory have completed corporate domain verification and legal review by the Main Admin
           </p>
         </div>
 
@@ -520,7 +637,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                         ) : (
                           <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                             <Clock className="w-3.5 h-3.5" />
-                            Audit Pending
+                            Review Pending
                           </span>
                         )}
                       </div>
@@ -585,7 +702,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by title, Teamcenter, Windchill, Active Workspace, BMIDE, ITAR, company..."
+            placeholder="Search by title, Teamcenter, Windchill, Active Workspace, BMIDE, company..."
             className="w-full pl-10 pr-4 py-2.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
           />
         </div>
@@ -618,7 +735,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             </div>
           </div>
 
-          {/* Module & Clearance Dropdowns */}
+          {/* Module & Compliance Dropdowns */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center gap-1.5">
               <span className="text-slate-400 font-medium">Domain Module:</span>
@@ -634,15 +751,15 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-slate-400 font-medium">Clearance / ITAR:</span>
+              <span className="text-slate-400 font-medium">Compliance:</span>
               <select
-                value={clearanceFilter}
-                onChange={e => setClearanceFilter(e.target.value as any)}
+                value={complianceFilter}
+                onChange={e => setComplianceFilter(e.target.value as any)}
                 className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:border-slate-900"
               >
                 <option value="All">All Requirements</option>
-                <option value="ITAR">ITAR Defense Only</option>
-                <option value="Commercial">Commercial (No Clearance)</option>
+                <option value="Certified">Certified Only</option>
+                <option value="Standard">Standard (No Certification)</option>
               </select>
             </div>
 
@@ -660,13 +777,13 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
               </select>
             </div>
 
-            {(searchQuery || selectedSystem !== 'All' || selectedModule !== 'All' || clearanceFilter !== 'All' || workplaceFilter !== 'All') && (
+            {(searchQuery || selectedSystem !== 'All' || selectedModule !== 'All' || complianceFilter !== 'All' || workplaceFilter !== 'All') && (
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedSystem('All');
                   setSelectedModule('All');
-                  setClearanceFilter('All');
+                  setComplianceFilter('All');
                   setWorkplaceFilter('All');
                 }}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium ml-auto"
@@ -702,7 +819,7 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
             <p className="text-xs text-slate-500">
               {jobs.length === 0 
                 ? 'Positions will appear here as employers publish new Teamcenter, Windchill, and 3DEXPERIENCE requisitions.'
-                : 'Try adjusting your PLM platform or clearance filters to explore other enterprise programs.'}
+                : 'Try adjusting your PLM platform or compliance filters to explore other enterprise programs.'}
             </p>
           </div>
         ) : (
@@ -754,10 +871,10 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                         <span className="font-mono tabular-nums text-slate-700">
                           {job.compensation?.min ? `$${job.compensation.min.toLocaleString()} - $${job.compensation.max?.toLocaleString()} ${job.compensation.period === 'hourly' ? '/ hr' : '/ yr'}` : 'Competitive Compensation'}
                         </span>
-                        {job.itarRequired && (
+                        {job.complianceCertRequired && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="text-amber-800 font-medium">ITAR Defense</span>
+                            <span className="text-amber-800 font-medium">Certification Required</span>
                           </>
                         )}
                       </div>
@@ -1054,9 +1171,20 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
                 <div className="p-3 rounded-lg border border-slate-200 flex items-center justify-between text-xs bg-white">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="font-mono text-slate-800">{resumeFileName}</span>
+                    <span className="font-mono text-slate-800">{candidate?.resumeFileName || resumeFileName}</span>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-mono">1.2 MB PDF</span>
+                  {candidate?.resumeUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setViewingResume({ url: candidate.resumeUrl!, filename: candidate.resumeFileName || resumeFileName })}
+                      className="text-[11px] text-blue-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>View Document</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-mono">1.2 MB PDF</span>
+                  )}
                 </div>
               </div>
 
@@ -1086,6 +1214,14 @@ export const CandidateView: React.FC<CandidateViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* In-app Document Viewer Modal */}
+      <DocumentViewerModal
+        isOpen={Boolean(viewingResume)}
+        onClose={() => setViewingResume(null)}
+        url={viewingResume?.url || ''}
+        filename={viewingResume?.filename || 'Resume_Document.pdf'}
+      />
 
     </div>
   );

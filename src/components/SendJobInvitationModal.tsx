@@ -152,11 +152,10 @@ export const SendJobInvitationModal: React.FC<SendJobInvitationModalProps> = ({
               <option value="custom">+ Specify New Position</option>
             </select>
           </div>
-
           {/* Position Title */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Position Title
+              Position Title <span className="text-[#BA3A2C] font-bold">*</span>
             </label>
             <input
               type="text"
@@ -184,7 +183,6 @@ export const SendJobInvitationModal: React.FC<SendJobInvitationModalProps> = ({
                 <option value="Onsite">Onsite</option>
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Proposed Compensation
@@ -202,7 +200,7 @@ export const SendJobInvitationModal: React.FC<SendJobInvitationModalProps> = ({
           {/* Job Description Summary */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Job Description & Scope
+              Job Description & Scope <span className="text-[#BA3A2C] font-bold">*</span>
             </label>
             <textarea
               rows={3}

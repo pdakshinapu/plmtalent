@@ -11,12 +11,13 @@ import {
   MapPin, 
   ArrowRight, 
   Eye, 
-  ShieldCheck,
   Building2,
-  FileText
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { CandidateSimpleDetailModal } from './CandidateSimpleDetailModal';
 import { CandidateProfile } from '../types';
+import { downloadResumeFile } from '../services/cloudinaryService';
 
 interface EmployerConnectionsViewProps {
   onSearchCandidates?: () => void;
@@ -164,13 +165,24 @@ export const EmployerConnectionsView: React.FC<EmployerConnectionsViewProps> = (
                       <span>Full Profile</span>
                     </button>
 
-                    <button
-                      onClick={() => alert(`Downloading verified resume: ${cand?.resumeFileName || 'Resume.pdf'}`)}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Verified Resume PDF</span>
-                    </button>
+                    {cand?.resumeUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => downloadResumeFile(cand.resumeUrl!, cand.resumeFileName || 'Resume.pdf')}
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Verified Resume PDF</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => alert(`Downloading verified resume: ${cand?.resumeFileName || 'Resume.pdf'}`)}
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Verified Resume PDF</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );

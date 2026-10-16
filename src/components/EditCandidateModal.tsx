@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { PLMSystem, PLMModule, CADTool, ClearanceLevel, CandidateProfile, CandidateProfileVisibility } from '../types';
+import { PLMSystem, PLMModule, CADTool, ComplianceLevel, CandidateProfile, CandidateProfileVisibility } from '../types';
 import { 
   X, 
   Check, 
@@ -14,8 +14,18 @@ import {
   Info, 
   Eye, 
   EyeOff,
-  Plus
+  Plus,
+  Upload,
+  Loader2,
+  CloudUpload,
+  ExternalLink,
+  Settings,
+  AlertCircle,
+  CheckCircle2,
+  Download
 } from 'lucide-react';
+import { uploadResumeToCloudinary, getCloudinaryConfig, downloadResumeFile } from '../services/cloudinaryService';
+import { DocumentViewerModal } from './DocumentViewerModal';
 
 interface EditCandidateModalProps {
   isOpen: boolean;
@@ -122,11 +132,11 @@ const InlineAdd: React.FC<{
   );
 };
 
-const CLEARANCE_OPTIONS: ClearanceLevel[] = [
+const COMPLIANCE_OPTIONS: ComplianceLevel[] = [
   'None',
-  'ITAR / Export Controlled',
-  'Secret',
-  'Top Secret'
+  'Industry Certified',
+  'Advanced',
+  'Expert'
 ];
 
 export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, onClose }) => {
@@ -154,13 +164,19 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
   const [secondaryPLMs, setSecondaryPLMs] = useState<PLMSystem[]>([]);
   const [modules, setModules] = useState<PLMModule[]>([]);
   const [cadTools, setCadTools] = useState<CADTool[]>([]);
-  const [clearance, setClearance] = useState<ClearanceLevel>('None');
+  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>('None');
   const [currentCompany, setCurrentCompany] = useState('');
   const [currentRole, setCurrentRole] = useState('');
+  const [currentCompensation, setCurrentCompensation] = useState('');
   const [expectedCompensation, setExpectedCompensation] = useState('');
   const [availableFrom, setAvailableFrom] = useState('');
   const [bio, setBio] = useState('');
   const [certificationsText, setCertificationsText] = useState('');
+  const [resumeFileName, setResumeFileName] = useState('');
+  const [resumeUrl, setResumeUrl] = useState('');
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [visibility, setVisibility] = useState<CandidateProfileVisibility>(DEFAULT_VISIBILITY);
 
   // Sync form when candidate changes or modal opens
@@ -176,13 +192,16 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
       setSecondaryPLMs(candidate.secondaryPLMs || []);
       setModules(candidate.modules || []);
       setCadTools(candidate.cadTools || []);
-      setClearance(candidate.clearance || 'None');
+      setComplianceLevel(candidate.complianceLevel || 'None');
       setCurrentCompany(candidate.currentCompany || '');
       setCurrentRole(candidate.currentRole || '');
+      setCurrentCompensation(candidate.currentCompensation || '');
       setExpectedCompensation(candidate.expectedCompensation || '');
       setAvailableFrom(candidate.availableFrom || '');
       setBio(candidate.bio || '');
       setCertificationsText((candidate.certifications || []).join(', '));
+      setResumeFileName(candidate.resumeFileName || '');
+      setResumeUrl(candidate.resumeUrl || '');
       setVisibility({ ...DEFAULT_VISIBILITY, ...(candidate.profileVisibility || {}) });
     }
   }, [candidate, isOpen]);
@@ -206,6 +225,25 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
     setCadTools(prev => 
       prev.includes(cad) ? prev.filter(c => c !== cad) : [...prev, cad]
     );
+  };
+
+  const handleResumeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setResumeFileName(file.name);
+    setIsUploadingResume(true);
+    setUploadError(null);
+
+    try {
+      const res = await uploadResumeToCloudinary(file);
+      setResumeUrl(res.secure_url);
+    } catch (err: any) {
+      console.error('Resume upload error:', err);
+      setUploadError(err.message || 'Failed to upload resume document');
+    } finally {
+      setIsUploadingResume(false);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -236,13 +274,16 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
       secondaryPLMs,
       modules,
       cadTools,
-      clearance,
+      complianceLevel,
       currentCompany: currentCompany.trim(),
       currentRole: currentRole.trim(),
+      currentCompensation: currentCompensation.trim(),
       expectedCompensation: expectedCompensation.trim(),
       availableFrom: availableFrom.trim(),
       bio: bio.trim(),
       certifications: certList,
+      resumeFileName: resumeFileName.trim() || undefined,
+      resumeUrl: resumeUrl.trim() || undefined,
       avatarInitials: initials,
       profileVisibility: visibility,
     };
@@ -266,7 +307,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
                 Edit Candidate Profile
               </h2>
               <p className="text-xs text-slate-500">
-                Update your verified PLM engineering competencies, certifications, and clearance
+                Update your verified PLM engineering competencies, certifications, and compliance level
               </p>
             </div>
           </div>
@@ -281,6 +322,135 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
 
         {/* Edit Form */}
         <form onSubmit={handleSave} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+          
+          {/* Resume Document Upload */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/90 via-slate-50 to-indigo-50/50 border-2 border-blue-200/80 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                  <FileText className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Resume Document (PDF / DOCX)
+                </h3>
+              </div>
+              {resumeUrl && (
+                <span className="text-[11px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-md font-medium border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Resume Attached</span>
+                </span>
+              )}
+            </div>
+
+            {/* Resume File Upload Box */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              resumeUrl 
+                ? 'border-emerald-300 bg-emerald-50/70' 
+                : isUploadingResume 
+                  ? 'border-blue-300 bg-blue-50/70' 
+                  : 'border-dashed border-slate-300 bg-white'
+            } flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-2xs shrink-0 ${
+                  resumeUrl 
+                    ? 'bg-emerald-600 text-white' 
+                    : isUploadingResume 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-blue-50 border border-blue-200 text-blue-600'
+                }`}>
+                  {isUploadingResume ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : resumeUrl ? (
+                    <CheckCircle2 className="w-6 h-6" />
+                  ) : (
+                    <FileText className="w-6 h-6" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-2 truncate">
+                    <span className="truncate">{resumeFileName || 'Upload Engineering Resume (PDF / DOCX)'}</span>
+                    {resumeUrl && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 shrink-0 border border-emerald-200">
+                        Attached
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {isUploadingResume ? (
+                      <span className="text-blue-600 font-semibold animate-pulse">Uploading and verifying resume document...</span>
+                    ) : resumeUrl ? (
+                      <span className="text-emerald-700 font-medium flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                        <span>Ready for employer review</span>
+                        <span className="hidden sm:inline">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsViewerOpen(true)}
+                          className="text-blue-600 hover:text-blue-800 font-bold underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <span>View Document</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ) : (
+                      'Attach your engineering resume for direct, 1-click job submissions.'
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {resumeUrl && (
+                  <button
+                    type="button"
+                    onClick={() => downloadResumeFile(resumeUrl, resumeFileName || 'Resume.pdf')}
+                    className="px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1.5 cursor-pointer"
+                    title="Download attached resume document"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                )}
+
+                <label className={`px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isUploadingResume
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : resumeUrl
+                      ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}>
+                  {isUploadingResume ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className={`w-3.5 h-3.5 ${resumeUrl ? 'text-slate-500' : 'text-white'}`} />
+                      <span>{resumeFileName ? 'Replace File' : 'Select Resume (PDF)'}</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    disabled={isUploadingResume}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleResumeFileChange}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Upload Error Banner */}
+            {uploadError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                <div className="flex-1">
+                  <div className="font-semibold text-red-800">Upload Issue</div>
+                  <div className="text-[11px] text-red-600 mt-0.5">{uploadError}</div>
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* Section 1: Basic & Contact */}
           <div className="space-y-4">
@@ -299,7 +469,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name *
+                  Full Name <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <input
                   type="text"
@@ -313,7 +483,7 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Professional Headline *
+                  Professional Headline <span className="text-[#BA3A2C] font-bold">*</span>
                 </label>
                 <input
                   type="text"
@@ -373,10 +543,10 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5 text-blue-600" />
-                <span>PLM Core Platforms & Clearance</span>
+                <span>PLM Core Platforms & Compliance</span>
               </h3>
               <SectionVisibilityToggle
-                description="Controls whether employers can see your primary/secondary PLM systems, years of experience, and clearance level."
+                description="Controls whether employers can see your primary/secondary PLM systems, years of experience, and compliance level."
                 checked={visibility.platforms}
                 onChange={(v) => setVisibility(prev => ({ ...prev, platforms: v }))}
               />
@@ -418,14 +588,14 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Defense / Export Clearance
+                  Compliance Certification
                 </label>
                 <select
-                  value={clearance}
-                  onChange={(e) => setClearance(e.target.value as ClearanceLevel)}
+                  value={complianceLevel}
+                  onChange={(e) => setComplianceLevel(e.target.value as ComplianceLevel)}
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white cursor-pointer"
                 >
-                  {CLEARANCE_OPTIONS.map(c => (
+                  {COMPLIANCE_OPTIONS.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -595,6 +765,19 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Current Compensation
+                </label>
+                <input
+                  type="text"
+                  value={currentCompensation}
+                  onChange={(e) => setCurrentCompensation(e.target.value)}
+                  placeholder="e.g. $120,000 / year or ₹12,00,000"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Expected Compensation
                 </label>
                 <input
@@ -605,7 +788,9 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
                 />
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Availability
@@ -668,6 +853,14 @@ export const EditCandidateModal: React.FC<EditCandidateModalProps> = ({ isOpen, 
         </form>
 
       </div>
+
+      {/* In-app Document Viewer Modal */}
+      <DocumentViewerModal
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        url={resumeUrl}
+        filename={resumeFileName || 'Resume.pdf'}
+      />
     </div>
   );
 };
